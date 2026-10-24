@@ -1,0 +1,5 @@
+Upstream: https://github.com/simkimsia/cloudflare-axi
+Commit:   5f487ba5da878d5ec237c2e81182d1310537a678
+Date:     2026-10-23T18:52:36+08:00
+Source README: https://github.com/simkimsia/cloudflare-axi#readme
+Snapshot of tracked files at the commit above. Excluded: .github/ (upstream CI/publish config).
