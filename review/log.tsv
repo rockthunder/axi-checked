@@ -549,3 +549,34 @@ packages/screencast-axi/src/version.ts	OK	10	SCAN-ONLY: recording/encoding logic
 packages/screencast-axi/scripts/build-reference.ts	OK	46	SCAN-ONLY: scripts/skill/docs.
 packages/screencast-axi/scripts/build-skill.ts	OK	29	SCAN-ONLY: scripts/skill/docs.
 packages/screencast-axi/skills/screencast-axi/SKILL.md	OK	56	SCAN-ONLY: scripts/skill/docs.
+packages/reactive-axi/packages/reactive-axi/bin/reactive-axi.js	OK	9	SCAN-ONLY: scripts/config/skill.
+packages/reactive-axi/packages/reactive-axi/eslint.config.js	OK	54	SCAN-ONLY: scripts/config/skill.
+packages/reactive-axi/packages/reactive-axi/src/chrome-client.js	OK	741	SCAN-ONLY: browser-side code. Package-wide sink scan found no fetch to external hosts, no eval/cookie/beacon.
+packages/reactive-axi/packages/reactive-axi/src/cli.js	MANUAL	608	Pattern-scanned. Starts a detached control-server daemon (process.execPath), probes/stops existing servers via /health,/shutdown and lsof+ps matching (SIGTERM only on a matched reactive-axi process), opens the browser. 'setup hooks'/plugin helpers like the lavish CLI.
+packages/reactive-axi/packages/reactive-axi/src/dev-server-manager.js	MANUAL	124	Read in full. Spawns the TARGET PROJECT's own dev server (node_modules/.bin/vite, next, react-scripts' webpack-dev-server) via cross-spawn and waits for it on a loopback port. Running reactive-axi on an untrusted repository executes that repository's dev tooling and config (same trust model as 'npm run dev').
+packages/reactive-axi/packages/reactive-axi/src/framework-adapters/webpack-dev-server.js	OK	69	SCAN-ONLY: server-side helper; package sink scan: child_process only in cli.js and framework adapters; fetch only to the local control server / dev server.
+packages/reactive-axi/packages/reactive-axi/src/proxy.js	NOTE	103	Read in full. Per-session express reverse proxy bound to 127.0.0.1 (LOOPBACK_HOST) forwarding to the dev server on loopback, rewriting only text/html responses to inject the review SDK; HMR websocket passthrough.
+packages/reactive-axi/packages/reactive-axi/src/server.js	MANUAL	1036	Pattern-scanned + bind/host logic read. Lavish-derived control server: Host header allowlist (loopback names + configured hosts; LAVISH-style '*' opt-out exists) but the HTTP API is otherwise unauthenticated on loopback (any local process can open sessions for any project dir and drive them). No telemetry/outbound fetches found. Listen host is configurable; wildcard binds are excluded from the allowlist.
+packages/reactive-axi/packages/reactive-axi/src/attachments.js	OK	61	SCAN-ONLY: server-side helper; package sink scan: child_process only in cli.js and framework adapters; fetch only to the local control server / dev server.
+packages/reactive-axi/packages/reactive-axi/src/framework-adapters/detect.js	OK	95	Read in full. Reads package.json / node_modules versions only.
+packages/reactive-axi/packages/reactive-axi/src/framework-adapters/errors.js	OK	22	SCAN-ONLY: server-side helper; package sink scan: child_process only in cli.js and framework adapters; fetch only to the local control server / dev server.
+packages/reactive-axi/packages/reactive-axi/src/framework-adapters/next.js	OK	35	SCAN-ONLY: server-side helper; package sink scan: child_process only in cli.js and framework adapters; fetch only to the local control server / dev server.
+packages/reactive-axi/packages/reactive-axi/src/framework-adapters/vite.js	MANUAL	101	Read in full. Writes a wrapper vite config INSIDE the project (.reactive-axi/vite.config.<session>.mjs, removed on cleanup) that imports the project's real vite.config and merges host/port/hmr overrides, then runs 'vite --config <wrapper>'. Executes project config code.
+packages/reactive-axi/packages/reactive-axi/src/html-transform.js	OK	25	SCAN-ONLY: server-side helper; package sink scan: child_process only in cli.js and framework adapters; fetch only to the local control server / dev server.
+packages/reactive-axi/packages/reactive-axi/src/paths.js	OK	100	SCAN-ONLY: server-side helper; package sink scan: child_process only in cli.js and framework adapters; fetch only to the local control server / dev server.
+packages/reactive-axi/packages/reactive-axi/src/plugin.js	OK	62	Plugin manifest builder (same as lavish); PLUGIN_SCHEMA_URL is metadata.
+packages/reactive-axi/packages/reactive-axi/src/react-fiber-inspector.js	OK	605	SCAN-ONLY: browser-side code. Package-wide sink scan found no fetch to external hosts, no eval/cookie/beacon.
+packages/reactive-axi/packages/reactive-axi/src/session-store.js	NOTE	487	SCAN-ONLY: local state.json store like lavish-axi (default umask).
+packages/reactive-axi/packages/reactive-axi/src/skill.js	OK	223	Generated skill stub; npx wording removed earlier.
+packages/reactive-axi/packages/reactive-axi/src/svelte-inspector.js	OK	183	SCAN-ONLY: browser-side code. Package-wide sink scan found no fetch to external hosts, no eval/cookie/beacon.
+packages/reactive-axi/packages/reactive-axi/src/version.js	OK	9	SCAN-ONLY: server-side helper; package sink scan: child_process only in cli.js and framework adapters; fetch only to the local control server / dev server.
+packages/reactive-axi/packages/reactive-axi/src/vue-inspector.js	OK	217	SCAN-ONLY: browser-side code. Package-wide sink scan found no fetch to external hosts, no eval/cookie/beacon.
+packages/reactive-axi/packages/reactive-axi/scripts/build-plugin.js	OK	31	SCAN-ONLY: scripts/config/skill.
+packages/reactive-axi/packages/reactive-axi/scripts/build-skill.js	OK	33	SCAN-ONLY: scripts/config/skill.
+packages/reactive-axi/packages/reactive-axi/scripts/build.js	OK	30	SCAN-ONLY: scripts/config/skill.
+packages/reactive-axi/packages/reactive-axi/skills/reactive-editor/SKILL.md	OK	55	SCAN-ONLY: scripts/config/skill.
+packages/axi/eslint.config.mjs	OK	37	Lint config.
+packages/axi/scripts/generate-docs.mjs	OK	301	Read first 40 lines + pattern scan: local-only doc generator (yaml + prettier, reads catalog.yaml/principles.yaml, rewrites README/docs, URL protocol allowlist http/https). No network or exec.
+packages/axi/.agents/skills/axi/SKILL.md	NOTE	273	Pattern-scanned. The AXI design-guidance skill for people BUILDING AXI tools; it recommends 'npx skills add <owner>/<repo>' installs and tells tool authors to write skill examples as 'npx -y mytool ...' and to ship session hooks. Only relevant when this skill is active; it is not part of any runtime tool here, but an agent following it would reintroduce npx -y. Consider deleting the vendored .agents directory (decision pending).
+packages/axi/AGENTS.md	NOTE	93	Read first 40 lines. Upstream contributor guide for the AXI repo (benchmarks, SDK, social video rendering). Benign.
+packages/axi/CLAUDE.md	NOTE	2	@AGENTS.md include.
