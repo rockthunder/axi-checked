@@ -430,3 +430,84 @@ packages/ado-axi-dtabolich/src/errors.ts	OK	92	SCAN-ONLY: Azure DevOps command l
 packages/ado-axi-dtabolich/src/toon.ts	OK	36	SCAN-ONLY: Azure DevOps command logic. Package sink scan: no direct network; child_process only az.ts; temp body file in api.ts.
 packages/ado-axi-dtabolich/src/version.ts	OK	22	SCAN-ONLY: Azure DevOps command logic. Package sink scan: no direct network; child_process only az.ts; temp body file in api.ts.
 packages/ado-axi-dtabolich/skills/ado-axi/SKILL.md	OK	49	SCAN-ONLY: skill/docs/config.
+packages/figma-axi/bin/figma-axi.js	OK	2	SCAN-ONLY: Figma command/formatting logic. Package sink scan: network only in figma/api.ts; no child_process; fs writes only for export output.
+packages/figma-axi/src/commands/export.ts	OK	91	SCAN-ONLY: Figma command/formatting logic. Package sink scan: network only in figma/api.ts; no child_process; fs writes only for export output.
+packages/figma-axi/src/figma/token.ts	MANUAL	61	Read in full. Token from FIGMA_TOKEN or plaintext {"token":...} in ~/.config/figma-axi/config.json (never written by the tool; user-created). Never printed. Prefer env.
+packages/figma-axi/src/index.ts	OK	27	Entry.
+packages/figma-axi/src/output/truncate.ts	OK	19	SCAN-ONLY: Figma command/formatting logic. Package sink scan: network only in figma/api.ts; no child_process; fs writes only for export output.
+packages/figma-axi/vitest.config.ts	OK	7	SCAN-ONLY: skill/docs/config.
+packages/figma-axi/src/cli/args.ts	OK	112	SCAN-ONLY: Figma command/formatting logic. Package sink scan: network only in figma/api.ts; no child_process; fs writes only for export output.
+packages/figma-axi/src/cli/help.ts	OK	40	SCAN-ONLY: Figma command/formatting logic. Package sink scan: network only in figma/api.ts; no child_process; fs writes only for export output.
+packages/figma-axi/src/cli/router.ts	OK	119	SCAN-ONLY: Figma command/formatting logic. Package sink scan: network only in figma/api.ts; no child_process; fs writes only for export output.
+packages/figma-axi/src/cli/spec.ts	OK	27	SCAN-ONLY: Figma command/formatting logic. Package sink scan: network only in figma/api.ts; no child_process; fs writes only for export output.
+packages/figma-axi/src/commands/comments.ts	OK	125	SCAN-ONLY: Figma command/formatting logic. Package sink scan: network only in figma/api.ts; no child_process; fs writes only for export output.
+packages/figma-axi/src/commands/file.ts	OK	143	SCAN-ONLY: Figma command/formatting logic. Package sink scan: network only in figma/api.ts; no child_process; fs writes only for export output.
+packages/figma-axi/src/commands/home.ts	OK	32	SCAN-ONLY: Figma command/formatting logic. Package sink scan: network only in figma/api.ts; no child_process; fs writes only for export output.
+packages/figma-axi/src/commands/library.ts	OK	161	SCAN-ONLY: Figma command/formatting logic. Package sink scan: network only in figma/api.ts; no child_process; fs writes only for export output.
+packages/figma-axi/src/commands/node.ts	OK	136	SCAN-ONLY: Figma command/formatting logic. Package sink scan: network only in figma/api.ts; no child_process; fs writes only for export output.
+packages/figma-axi/src/commands/variables.ts	OK	155	SCAN-ONLY: Figma command/formatting logic. Package sink scan: network only in figma/api.ts; no child_process; fs writes only for export output.
+packages/figma-axi/src/figma/api.ts	NOTE	143	Read in full. Calls https://api.figma.com (FIGMA_API_BASE env can redirect the token elsewhere - trusted env). downloadTo() fetches the pre-signed render URL returned by the API with NO auth header and writes it to the chosen path; URL host is not restricted (SSRF-style fetch of an API-supplied URL, token not sent).
+packages/figma-axi/src/figma/summarize.ts	OK	155	SCAN-ONLY: Figma command/formatting logic. Package sink scan: network only in figma/api.ts; no child_process; fs writes only for export output.
+packages/figma-axi/src/figma/urls.ts	OK	70	SCAN-ONLY: Figma command/formatting logic. Package sink scan: network only in figma/api.ts; no child_process; fs writes only for export output.
+packages/figma-axi/src/output/errors.ts	OK	25	SCAN-ONLY: Figma command/formatting logic. Package sink scan: network only in figma/api.ts; no child_process; fs writes only for export output.
+packages/figma-axi/src/output/suggest.ts	OK	7	SCAN-ONLY: Figma command/formatting logic. Package sink scan: network only in figma/api.ts; no child_process; fs writes only for export output.
+packages/figma-axi/src/output/toon.ts	OK	66	SCAN-ONLY: Figma command/formatting logic. Package sink scan: network only in figma/api.ts; no child_process; fs writes only for export output.
+packages/figma-axi/src/skill/content.ts	OK	104	SCAN-ONLY: Figma command/formatting logic. Package sink scan: network only in figma/api.ts; no child_process; fs writes only for export output.
+packages/figma-axi/scripts/gen-skill.mjs	OK	40	SCAN-ONLY: skill/docs/config.
+packages/figma-axi/AGENTS.md	NOTE	16	Read in full (shown by the harness). Upstream contributor guidance that tells agents to run 'npx -y axi-axi ...' (on-demand download of an unvetted package). Auto-loaded by Claude Code in this dir. Recommend deleting AGENTS.md/CLAUDE.md from vendored packages (decision pending).
+packages/figma-axi/CLAUDE.md	NOTE	2	'@AGENTS.md' include; see AGENTS.md note.
+packages/figma-axi/skills/axi-axi/SKILL.md	OK	33	SCAN-ONLY: skill/docs/config.
+packages/figma-axi/skills/figma-axi/SKILL.md	OK	35	SCAN-ONLY: skill/docs/config.
+packages/canva-axi/bin/canva-axi.js	OK	2	SCAN-ONLY: Canva command logic. Network only in api/client.ts; no child_process.
+packages/canva-axi/src/api/client.ts	OK	279	Read in full. Exemplary: Bearer token only to api.canva.com (HTTPS-only base URL, no creds/query/fragment), export download sends no auth header, manual redirects limited to 5 and HTTPS-only, destination opened with 'wx' (no overwrite). Token from CANVA_ACCESS_TOKEN env only.
+packages/canva-axi/src/index.ts	OK	12	Entry.
+packages/canva-axi/src/cli/args.ts	OK	103	SCAN-ONLY: Canva command logic. Network only in api/client.ts; no child_process.
+packages/canva-axi/src/cli/router.ts	OK	152	SCAN-ONLY: Canva command logic. Network only in api/client.ts; no child_process.
+packages/canva-axi/src/cli/spec.ts	OK	21	SCAN-ONLY: Canva command logic. Network only in api/client.ts; no child_process.
+packages/canva-axi/src/commands/canva.ts	NOTE	621	SCAN-ONLY. Mutations are gated by --confirm per the package notes.
+packages/canva-axi/src/commands/home.ts	OK	50	SCAN-ONLY: Canva command logic. Network only in api/client.ts; no child_process.
+packages/canva-axi/src/output/errors.ts	OK	34	SCAN-ONLY: Canva command logic. Network only in api/client.ts; no child_process.
+packages/canva-axi/src/output/toon.ts	OK	66	SCAN-ONLY: Canva command logic. Network only in api/client.ts; no child_process.
+packages/canva-axi/src/skill/content.ts	OK	121	SCAN-ONLY: Canva command logic. Network only in api/client.ts; no child_process.
+packages/canva-axi/scripts/gen-skill.mjs	OK	41	SCAN-ONLY: skill generator.
+packages/canva-axi/AGENTS.md	NOTE	27	Read in full (shown by the harness). Documents that every mutation requires --confirm before network access; benign.
+packages/canva-axi/skills/canva-axi/SKILL.md	OK	24	SCAN-ONLY: skill/docs/config.
+packages/clockify-axi/bin/clockify-axi.ts	OK	8	SCAN-ONLY: Clockify commands. Network only in rest.ts; no child_process.
+packages/clockify-axi/src/cli.ts	OK	82	SCAN-ONLY: Clockify commands. Network only in rest.ts; no child_process.
+packages/clockify-axi/src/commands/clients.ts	OK	31	SCAN-ONLY: Clockify commands. Network only in rest.ts; no child_process.
+packages/clockify-axi/src/commands/log.ts	OK	50	SCAN-ONLY: Clockify commands. Network only in rest.ts; no child_process.
+packages/clockify-axi/src/commands/projects.ts	OK	72	SCAN-ONLY: Clockify commands. Network only in rest.ts; no child_process.
+packages/clockify-axi/src/commands/report.ts	OK	136	SCAN-ONLY: Clockify commands. Network only in rest.ts; no child_process.
+packages/clockify-axi/src/commands/tags.ts	OK	31	SCAN-ONLY: Clockify commands. Network only in rest.ts; no child_process.
+packages/clockify-axi/src/commands/tasks.ts	OK	48	SCAN-ONLY: Clockify commands. Network only in rest.ts; no child_process.
+packages/clockify-axi/src/commands/timer.ts	OK	79	SCAN-ONLY: Clockify commands. Network only in rest.ts; no child_process.
+packages/clockify-axi/src/commands/whoami.ts	OK	28	SCAN-ONLY: Clockify commands. Network only in rest.ts; no child_process.
+packages/clockify-axi/src/flags.ts	OK	71	SCAN-ONLY: Clockify commands. Network only in rest.ts; no child_process.
+packages/clockify-axi/src/help.ts	OK	39	SCAN-ONLY: Clockify commands. Network only in rest.ts; no child_process.
+packages/clockify-axi/src/identity.ts	OK	85	SCAN-ONLY: Clockify commands. Network only in rest.ts; no child_process.
+packages/clockify-axi/src/reports.ts	OK	61	SCAN-ONLY: Clockify commands. Network only in rest.ts; no child_process.
+packages/clockify-axi/src/rest.ts	NOTE	84	Read in full. x-api-key header to https://api.clockify.me (CLOCKIFY_API_BASE / CLOCKIFY_REPORTS_API_BASE env can redirect it - trusted env). Key from CLOCKIFY_API_KEY env only. DELETE/PATCH/POST helpers exist (time entries, projects).
+packages/clockify-axi/src/usage.ts	OK	10	SCAN-ONLY: Clockify commands. Network only in rest.ts; no child_process.
+packages/clockify-axi/src/version.ts	OK	1	SCAN-ONLY: Clockify commands. Network only in rest.ts; no child_process.
+packages/clockify-axi/skills/clockify-axi/SKILL.md	OK	25	SCAN-ONLY: skill/docs/config.
+packages/homebrew-axi/bin/homebrew-axi.ts	OK	8	SCAN-ONLY: Homebrew commands (read-only by construction via brew.ts).
+packages/homebrew-axi/src/cli.ts	OK	31	SCAN-ONLY: Homebrew commands (read-only by construction via brew.ts).
+packages/homebrew-axi/src/commands/installed.ts	OK	87	SCAN-ONLY: Homebrew commands (read-only by construction via brew.ts).
+packages/homebrew-axi/src/commands/setup.ts	MANUAL	17	SCAN-ONLY: 'setup hooks' installs persistent SessionStart hooks via axi-sdk-js.
+packages/homebrew-axi/vitest.config.ts	OK	8	SCAN-ONLY: skill/docs/config.
+packages/homebrew-axi/src/api.ts	OK	159	Pattern-checked: unauthenticated GET https://formulae.brew.sh/api (public formula metadata).
+packages/homebrew-axi/src/args.ts	OK	95	SCAN-ONLY: Homebrew commands (read-only by construction via brew.ts).
+packages/homebrew-axi/src/brew.ts	OK	145	Read in full. Single chokepoint runs 'brew' only for an allowlist of read-only subcommands (outdated, list, search, info, --version); execFile argv only.
+packages/homebrew-axi/src/commands/deps.ts	OK	36	SCAN-ONLY: Homebrew commands (read-only by construction via brew.ts).
+packages/homebrew-axi/src/commands/info.ts	OK	210	SCAN-ONLY: Homebrew commands (read-only by construction via brew.ts).
+packages/homebrew-axi/src/commands/outdated.ts	OK	47	SCAN-ONLY: Homebrew commands (read-only by construction via brew.ts).
+packages/homebrew-axi/src/commands/search.ts	OK	91	SCAN-ONLY: Homebrew commands (read-only by construction via brew.ts).
+packages/homebrew-axi/src/format.ts	OK	18	SCAN-ONLY: Homebrew commands (read-only by construction via brew.ts).
+packages/homebrew-axi/src/help.ts	OK	82	SCAN-ONLY: Homebrew commands (read-only by construction via brew.ts).
+packages/homebrew-axi/src/home.ts	OK	54	SCAN-ONLY: Homebrew commands (read-only by construction via brew.ts).
+packages/homebrew-axi/src/outdated.ts	OK	38	SCAN-ONLY: Homebrew commands (read-only by construction via brew.ts).
+packages/homebrew-axi/src/skill.ts	OK	101	SCAN-ONLY: Homebrew commands (read-only by construction via brew.ts).
+packages/homebrew-axi/src/version.ts	OK	30	SCAN-ONLY: Homebrew commands (read-only by construction via brew.ts).
+packages/homebrew-axi/scripts/build-skill.ts	OK	35	SCAN-ONLY: skill/docs/config.
+packages/homebrew-axi/AGENTS.md	OK	123	SCAN-ONLY: skill/docs/config.
+packages/homebrew-axi/skills/homebrew-axi/SKILL.md	OK	64	SCAN-ONLY: skill/docs/config.
