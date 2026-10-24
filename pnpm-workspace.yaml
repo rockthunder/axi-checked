@@ -1,0 +1,25 @@
+packages:
+  - "packages/*"
+  - "packages/*/packages/*"
+  # monorepo roots of upstream projects; only their inner packages are workspace members
+  - "!packages/axi"
+  - "!packages/atlassian-axi"
+  - "!packages/reactive-axi"
+
+# --- supply-chain policy (carried over from upstream, applied to the whole workspace) ---
+minimumReleaseAge: 10080
+minimumReleaseAgeStrict: true
+minimumReleaseAgeExclude:
+  - axi-sdk-js
+trustPolicy: no-downgrade
+blockExoticSubdeps: true
+
+# Only esbuild may run a dependency build script (it just places a platform binary).
+allowBuilds:
+  esbuild: true
+
+overrides:
+  # every tool uses the single patched SDK in this repo (no self-update, no telemetry)
+  axi-sdk-js: workspace:*
+  # GHSA-p95v-992w-h6c3 (prototype pollution) is fixed in 2.3.1
+  "@toon-format/toon@<2.3.1": 2.3.1
