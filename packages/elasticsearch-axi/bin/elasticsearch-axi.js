@@ -261,7 +261,14 @@ function encodeApiKey(value) {
 
 function runCurl(method, urlPath, body, context, options = {}) {
   const args = ["-s", "-S", "-X", method, `${context.endpoint}${urlPath}`, "-H", `Content-Type: ${options.ndjson ? "application/x-ndjson" : "application/json"}`, "-H", "Accept: application/json", "-w", "\n%{http_code}"];
-  if (context.authHeader) args.push("-H", `Authorization: ${context.authHeader}`);
+  // Credentials must not appear on the command line (visible to other local users via the process list):
+  // hand the Authorization header to curl as a config file on stdin instead.
+  let curlConfig;
+  if (context.authHeader) {
+    const header = `Authorization: ${context.authHeader}`.replace(/[\r\n]/g, "").replace(/[\\"]/g, (c) => "\\" + c);
+    curlConfig = `header = "${header}"\n`;
+    args.push("-K", "-");
+  }
   if (context.insecure) args.push("-k");
   let tempDir = null;
   if (body !== undefined && body !== null) {
@@ -270,7 +277,7 @@ function runCurl(method, urlPath, body, context, options = {}) {
     fs.writeFileSync(tempFile, options.ndjson ? String(body) : JSON.stringify(body));
     args.push("--data-binary", `@${tempFile}`);
   }
-  const result = spawnSync("curl", args, { encoding: "utf8", maxBuffer: 1024 * 1024 * 32 });
+  const result = spawnSync("curl", args, { encoding: "utf8", maxBuffer: 1024 * 1024 * 32, ...(curlConfig ? { input: curlConfig } : {}) });
   if (tempDir) {
     try {
       fs.rmSync(tempDir, { recursive: true, force: true });
