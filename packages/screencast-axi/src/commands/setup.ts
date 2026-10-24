@@ -1,10 +1,27 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join, relative, resolve } from "node:path";
 import { ScreencastError } from "../errors.js";
 import { parseFlags, type FlagSpecs } from "../flags.js";
 import type { AxiStructuredOutput } from "../output.js";
 import { detectToolchain, installHint, run } from "../toolchain.js";
 import { CONFIG_BASENAMES } from "../config.js";
+
+/** Absolute path of the consuming project's Playwright CLI, or null when it is not installed. */
+export function resolveProjectPlaywrightCli(cwd: string = process.cwd()): string | null {
+  // The package's `exports` map does not expose cli.js, so locate the package root through
+  // package.json and use the file next to it.
+  for (const name of ["playwright", "playwright-core"]) {
+    try {
+      const manifest = createRequire(join(cwd, "__resolve__.js")).resolve(`${name}/package.json`);
+      const cli = join(dirname(manifest), "cli.js");
+      if (existsSync(cli)) return cli;
+    } catch {
+      // not installed under this name
+    }
+  }
+  return null;
+}
 
 export const SETUP_FLAGS: FlagSpecs = {
   "browsers-only": { kind: "boolean", description: "Install Chromium and stop" },
@@ -37,11 +54,19 @@ export async function setupCommand(args: string[]): Promise<AxiStructuredOutput>
   const done: string[] = [];
   const manual: string[] = [];
 
-  const install = await run("npx", ["--yes", "playwright", "install", "chromium"]);
-  if (install.code === 0) {
-    done.push("chromium installed (or already present)");
+  // Corporate build: never `npx --yes` (that would fetch whatever `playwright` the public registry
+  // serves). Only the project's own, already-installed Playwright CLI is run; otherwise the
+  // command is printed for the user to run deliberately.
+  const playwrightCli = resolveProjectPlaywrightCli();
+  if (playwrightCli) {
+    const install = await run(process.execPath, [playwrightCli, "install", "chromium"]);
+    if (install.code === 0) {
+      done.push("chromium installed (or already present)");
+    } else {
+      manual.push("pnpm exec playwright install chromium");
+    }
   } else {
-    manual.push("npx playwright install chromium");
+    manual.push("pnpm add -D playwright && pnpm exec playwright install chromium");
   }
 
   if (flags["browsers-only"] !== true) {
