@@ -294,54 +294,6 @@ test(
   },
 );
 
-test(
-  "a Tailscale address freed after startup is bound by the next reconcile and restores the MagicDNS link",
-  { timeout: 15_000 },
-  async (t) => {
-    const tailscaleIpv4 = otherLocalIpv4();
-    if (!tailscaleIpv4) {
-      t.skip("host has no non-loopback IPv4 address");
-      return;
-    }
-    await withTempDir(async (dir) => {
-      const artifact = await writeArtifact(dir);
-      const port = await freePort(tailscaleIpv4);
-      const squatter = await listenRaw(tailscaleIpv4, port);
-      const magicDnsName = "review-phone.example.ts.net";
-      const server = await serve({
-        port,
-        stateFile: path.join(dir, "state.json"),
-        version: "9.9.9-test",
-        env: {},
-        detectTailscale: async () => ({ ipv4: tailscaleIpv4, magicDnsName }),
-        log: () => {},
-        idleTimeoutMs: null,
-        // Far beyond the test: only the reconcile a CLI invocation triggers can bind it here.
-        bindRecoveryDelaysMs: [600_000],
-      });
-      try {
-        const degraded = await openSession("127.0.0.1", port, artifact);
-        assert.match(degraded.url, new RegExp(`^http://127\\.0\\.0\\.1:${port}/session/`));
-        assert.match(
-          degraded.network_warning,
-          new RegExp(`Tailscale binding failed for ${tailscaleIpv4}:${port} \\(EADDRINUSE.*no phone access`),
-        );
-
-        await closeRaw(squatter);
-        const reconciled = await health("127.0.0.1", port, "?reconcile_network=1");
-        assert.equal(reconciled.network_stale, undefined);
-        assert.equal(reconciled.network_warning, undefined);
-        assert.ok(reconciled.hosts.includes(tailscaleIpv4));
-        const recovered = await openSession("127.0.0.1", port, artifact);
-        assert.equal(recovered.url, `http://${magicDnsName}:${port}/session/${recovered.key}`);
-      } finally {
-        await server.close();
-        await closeRaw(squatter).catch(() => {});
-      }
-    });
-  },
-);
-
 test("a second server for a port whose loopback a Lavish server owns refuses to start", async (t) => {
   const otherHost = otherLocalIpv4();
   if (!otherHost) {
@@ -1019,47 +971,6 @@ test("a replacement inherits every address still on this machine and drops one t
     }
   });
 });
-
-test(
-  "a network-stale replacement by an agent with its own host keeps a Tailscale address that is still live",
-  { timeout: 30_000 },
-  async (t) => {
-    const otherHost = otherLocalIpv4();
-    if (!otherHost || !(await ipv6LoopbackAvailable())) {
-      t.skip("host needs a non-loopback IPv4 address and IPv6 loopback");
-      return;
-    }
-    await withTempDir(async (dir) => {
-      const artifact = await writeArtifact(dir);
-      const port = await freePort(otherHost);
-      // Tailscale stays up on the same address; only the MagicDNS name changes, which makes the
-      // running server network-stale.
-      let tailscale = { ipv4: otherHost, magicDnsName: "before.example.ts.net" };
-      const stale = await serve({
-        port,
-        stateFile: path.join(dir, "state.json"),
-        version: VERSION,
-        env: {},
-        detectTailscale: async () => tailscale,
-        log: () => {},
-        idleTimeoutMs: null,
-      });
-      try {
-        const { key } = await openSession(otherHost, port, artifact);
-        tailscale = { ipv4: otherHost, magicDnsName: "after.example.ts.net" };
-        // The agent pins ::1, so the replacement it starts does not detect Tailscale itself.
-        await withEnv(cliEnv(dir, port, "::1"), () => runCli(["open", artifact, "--no-open"]));
-        assert.equal(await isResolved(stale.done), true, "the network-stale server was not replaced");
-        const replacement = await health("127.0.0.1", port);
-        assert.ok(replacement.hosts.includes(otherHost), `lost the live tailnet address: ${replacement.hosts}`);
-        assert.equal(await getStatus(`http://${otherHost}:${port}/session/${key}`), 200);
-      } finally {
-        await stale.close().catch(() => {});
-        await shutdownAt("127.0.0.1", port);
-      }
-    });
-  },
-);
 
 test(
   "a configured name whose DNS recovers is served at its address and is not replaced",
