@@ -1,0 +1,24 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "reactive-axi",
+  "version": "0.0.8",
+  "description": "Click any element in your live React, Vue, or Svelte app and send feedback straight to your coding agent, resolved to the exact source location.",
+  "author": {
+    "name": "Adeesh Sharma",
+    "url": "https://github.com/adeeshsharma"
+  },
+  "homepage": "https://github.com/adeeshsharma/reactive-axi#readme",
+  "repository": "https://github.com/adeeshsharma/reactive-axi",
+  "license": "MIT",
+  "keywords": [
+    "axi",
+    "agent",
+    "cli",
+    "react",
+    "vue",
+    "svelte",
+    "devtools",
+    "review",
+    "collaboration"
+  ]
+}

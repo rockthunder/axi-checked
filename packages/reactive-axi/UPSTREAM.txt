@@ -1,0 +1,5 @@
+Upstream: https://github.com/adeeshsharma/reactive-axi
+Commit:   491a3e648bc16e9d3d763b7244d852a75e322f41
+Date:     2026-08-21T19:00:24+05:30
+Source README: https://github.com/adeeshsharma/reactive-axi#readme
+Snapshot of tracked files at the commit above. Excluded: .github/ (upstream CI/publish config), fixtures/ (test fixture apps excluded (not shipped; carry many vulnerable deps)).
