@@ -1,0 +1,2631 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
+
+vi.mock("../../src/gh.js", () => ({
+  ghJson: vi.fn(),
+  ghExec: vi.fn(),
+  ghExecWithAttachmentState: vi.fn(),
+  ensureAttachmentSupport: vi.fn(),
+  ghRaw: vi.fn(),
+}));
+
+vi.mock("../../src/stdin.js", () => ({
+  readStdin: vi.fn(),
+  readStdinSync: vi.fn(),
+  isStdinTTY: vi.fn(),
+}));
+
+import {
+  ghJson,
+  ghExec,
+  ghExecWithAttachmentState,
+  ensureAttachmentSupport,
+  ghRaw,
+} from "../../src/gh.js";
+import { isStdinTTY, readStdinSync } from "../../src/stdin.js";
+import { prCommand, PR_HELP } from "../../src/commands/pr.js";
+import { AttachmentMutationError, AxiError } from "../../src/errors.js";
+import type { RepoContext } from "../../src/context.js";
+import { withPng } from "../helpers/media.js";
+
+const mockedGhJson = vi.mocked(ghJson);
+const mockedGhExec = vi.mocked(ghExec);
+const mockedGhExecWithAttachmentState = vi.mocked(ghExecWithAttachmentState);
+const mockedEnsureAttachmentSupport = vi.mocked(ensureAttachmentSupport);
+const mockedGhRaw = vi.mocked(ghRaw);
+
+function partialAttachmentError(url: string): AttachmentMutationError {
+  return new AttachmentMutationError(
+    `${url}\n`,
+    url,
+    new AxiError(
+      "--attach oversized.png: images must be at most 10 MB",
+      "VALIDATION_ERROR",
+    ),
+  );
+}
+
+const ctx: RepoContext = {
+  owner: "octo",
+  name: "repo",
+  nwo: "octo/repo",
+  source: "flag",
+};
+
+async function withBodyFile<T>(
+  body: string,
+  fn: (file: string) => Promise<T>,
+): Promise<T> {
+  const dir = mkdtempSync(join(tmpdir(), "gh-axi-pr-body-"));
+  try {
+    const file = join(dir, "body.md");
+    writeFileSync(file, body, "utf8");
+    return await fn(file);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * A `pr merge` run: the pre-merge `pr view` sees an open PR, `gh pr merge`
+ * exits 0, and the post-merge GraphQL re-read returns `after`.
+ */
+function mockMerge(after: Record<string, unknown> = { state: "MERGED" }) {
+  mockedGhJson.mockImplementation(async (args: string[]) =>
+    args[0] === "api"
+      ? { data: { node: after } }
+      : { state: "OPEN", id: "PR_node" },
+  );
+  mockedGhExec.mockResolvedValue("");
+}
+
+describe("prCommand", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  describe("router", () => {
+    it("returns help when --help is passed", async () => {
+      const result = await prCommand(["--help"]);
+      expect(result).toBe(PR_HELP);
+    });
+
+    it("returns help when no subcommand is given", async () => {
+      const result = await prCommand([]);
+      expect(result).toBe(PR_HELP);
+    });
+
+    it("returns error for unknown subcommand", async () => {
+      const result = await prCommand(["unknown"]);
+      expect(result).toContain("Unknown pr subcommand: unknown");
+    });
+  });
+
+  describe("list filtered totals", () => {
+    const twoPrs = [
+      { number: 1, title: "A", state: "OPEN", isDraft: false },
+      { number: 2, title: "B", state: "OPEN", isDraft: true },
+    ];
+
+    it("counts only filtered PRs when --label is applied", async () => {
+      mockedGhJson.mockResolvedValue(twoPrs);
+      mockedGhRaw.mockResolvedValue({
+        stdout: JSON.stringify({ data: { search: { issueCount: 12 } } }),
+        stderr: "",
+        exitCode: 0,
+      });
+
+      const result = await prCommand(
+        ["list", "--limit", "2", "--label", "bug"],
+        ctx,
+      );
+
+      const gqlArgs = mockedGhRaw.mock.calls[0][0] as string[];
+      const searchQuery = gqlArgs.find((a) => a.startsWith("q="));
+      expect(searchQuery).toContain("repo:octo/repo");
+      expect(searchQuery).toContain("is:pr");
+      expect(searchQuery).toContain("is:open");
+      expect(searchQuery).toContain("label:bug");
+      expect(result).toContain("count: 2 of 12 total");
+    });
+
+    it("carries assignee, author, base, head and draft into the total", async () => {
+      mockedGhJson.mockResolvedValue(twoPrs);
+      mockedGhRaw.mockResolvedValue({
+        stdout: JSON.stringify({ data: { search: { issueCount: 4 } } }),
+        stderr: "",
+        exitCode: 0,
+      });
+
+      await prCommand(
+        [
+          "list",
+          "--limit",
+          "2",
+          "--assignee",
+          "octocat",
+          "--author",
+          "hubot",
+          "--base",
+          "main",
+          "--head",
+          "feature",
+          "--draft",
+        ],
+        ctx,
+      );
+
+      const gqlArgs = mockedGhRaw.mock.calls[0][0] as string[];
+      const searchQuery = gqlArgs.find((a) => a.startsWith("q="));
+      expect(searchQuery).toContain("assignee:octocat");
+      expect(searchQuery).toContain("author:hubot");
+      expect(searchQuery).toContain("base:main");
+      expect(searchQuery).toContain("head:feature");
+      expect(searchQuery).toContain("draft:true");
+    });
+
+    it("uses the exact repository total when no filter is applied", async () => {
+      mockedGhJson.mockResolvedValue(twoPrs);
+      mockedGhRaw.mockResolvedValue({
+        stdout: JSON.stringify({
+          data: { repository: { pullRequests: { totalCount: 310 } } },
+        }),
+        stderr: "",
+        exitCode: 0,
+      });
+
+      const result = await prCommand(["list", "--limit", "2"], ctx);
+
+      const query = (mockedGhRaw.mock.calls[0][0] as string[]).join(" ");
+      expect(query).toContain("repository(");
+      expect(query).toContain("pullRequests(states:[OPEN])");
+      expect(query).not.toContain("search(");
+      expect(result).toContain("count: 2 of 310 total");
+    });
+
+    it("counts merged PRs alongside closed ones in the repository total", async () => {
+      mockedGhJson.mockResolvedValue(twoPrs);
+      mockedGhRaw.mockResolvedValue({
+        stdout: JSON.stringify({
+          data: { repository: { pullRequests: { totalCount: 88 } } },
+        }),
+        stderr: "",
+        exitCode: 0,
+      });
+
+      await prCommand(["list", "--limit", "2", "--state", "closed"], ctx);
+
+      const query = (mockedGhRaw.mock.calls[0][0] as string[]).join(" ");
+      expect(query).toContain("pullRequests(states:[CLOSED,MERGED])");
+    });
+
+    it("omits the states argument for an unfiltered --state all total", async () => {
+      mockedGhJson.mockResolvedValue(twoPrs);
+      mockedGhRaw.mockResolvedValue({
+        stdout: JSON.stringify({
+          data: { repository: { pullRequests: { totalCount: 500 } } },
+        }),
+        stderr: "",
+        exitCode: 0,
+      });
+
+      const result = await prCommand(
+        ["list", "--limit", "2", "--state", "all"],
+        ctx,
+      );
+
+      const query = (mockedGhRaw.mock.calls[0][0] as string[]).join(" ");
+      expect(query).toContain("pullRequests { totalCount }");
+      expect(query).not.toContain("states:");
+      expect(result).toContain("count: 2 of 500 total");
+    });
+
+    it("counts every label of a comma-separated --label list", async () => {
+      mockedGhJson.mockResolvedValue(twoPrs);
+      mockedGhRaw.mockResolvedValue({
+        stdout: JSON.stringify({ data: { search: { issueCount: 6 } } }),
+        stderr: "",
+        exitCode: 0,
+      });
+
+      await prCommand(["list", "--limit", "2", "--label", "bug,docs"], ctx);
+
+      const gqlArgs = mockedGhRaw.mock.calls[0][0] as string[];
+      const searchQuery = gqlArgs.find((a) => a.startsWith("q="));
+      expect(searchQuery).toContain("label:bug");
+      expect(searchQuery).toContain("label:docs");
+      expect(searchQuery).not.toContain("label:bug,docs");
+    });
+
+    it("omits the total rather than guessing when the count lookup fails", async () => {
+      mockedGhJson.mockResolvedValue(twoPrs);
+      mockedGhRaw.mockResolvedValue({
+        stdout: "",
+        stderr: "boom",
+        exitCode: 1,
+      });
+
+      const result = await prCommand(
+        ["list", "--limit", "2", "--label", "bug"],
+        ctx,
+      );
+
+      expect(result).toContain("count: 2 (showing first 2)");
+      expect(result).not.toContain("total");
+    });
+  });
+
+  describe("list", () => {
+    it("returns list with count line", async () => {
+      mockedGhJson.mockResolvedValue([
+        {
+          number: 1,
+          title: "Fix bug",
+          state: "OPEN",
+          author: { login: "alice" },
+          isDraft: false,
+          reviewDecision: "APPROVED",
+        },
+        {
+          number: 2,
+          title: "Add feature",
+          state: "OPEN",
+          author: { login: "bob" },
+          isDraft: true,
+          reviewDecision: "",
+        },
+      ]);
+
+      const result = await prCommand(["list"], ctx);
+
+      expect(result).toContain("count: 2");
+      expect(result).toContain("Fix bug");
+      expect(result).toContain("Add feature");
+      expect(mockedGhJson).toHaveBeenCalledWith(
+        expect.arrayContaining(["pr", "list", "--json"]),
+        ctx,
+      );
+    });
+
+    it("uses default compact --json fields when --fields is not passed", async () => {
+      mockedGhJson.mockResolvedValue([]);
+      await prCommand(["list"], ctx);
+
+      const callArgs = mockedGhJson.mock.calls[0][0] as string[];
+      const jsonIdx = callArgs.indexOf("--json");
+      const jsonValue = callArgs[jsonIdx + 1];
+      expect(jsonValue).not.toContain("body");
+      expect(jsonValue).not.toContain("createdAt");
+      expect(jsonValue).toContain("number");
+      expect(jsonValue).toContain("title");
+    });
+
+    it("extends --json and schema when --fields is passed", async () => {
+      mockedGhJson.mockResolvedValue([
+        {
+          number: 1,
+          title: "Fix",
+          state: "OPEN",
+          author: { login: "alice" },
+          isDraft: false,
+          reviewDecision: "APPROVED",
+          body: "PR body text",
+          createdAt: "2024-01-01T00:00:00Z",
+        },
+      ]);
+
+      const result = await prCommand(
+        ["list", "--fields", "body,createdAt"],
+        ctx,
+      );
+
+      const callArgs = mockedGhJson.mock.calls[0][0] as string[];
+      const jsonIdx = callArgs.indexOf("--json");
+      const jsonValue = callArgs[jsonIdx + 1];
+      expect(jsonValue).toContain("body");
+      expect(jsonValue).toContain("createdAt");
+
+      expect(result).toContain("PR body text");
+    });
+
+    it("supports updatedAt in --fields", async () => {
+      mockedGhJson.mockResolvedValue([
+        {
+          number: 1,
+          title: "Fix",
+          state: "OPEN",
+          author: { login: "alice" },
+          isDraft: false,
+          reviewDecision: "APPROVED",
+          updatedAt: "2024-01-02T00:00:00Z",
+        },
+      ]);
+
+      const result = await prCommand(["list", "--fields", "updatedAt"], ctx);
+
+      const callArgs = mockedGhJson.mock.calls[0][0] as string[];
+      const jsonIdx = callArgs.indexOf("--json");
+      expect(callArgs[jsonIdx + 1]).toContain("updatedAt");
+      expect(result).toContain("updated_at");
+    });
+
+    it("throws VALIDATION_ERROR for unknown --fields", async () => {
+      await expect(
+        prCommand(["list", "--fields", "fakeField"], ctx),
+      ).rejects.toThrow(AxiError);
+
+      try {
+        await prCommand(["list", "--fields", "fakeField"], ctx);
+      } catch (e) {
+        expect((e as AxiError).code).toBe("VALIDATION_ERROR");
+        expect((e as AxiError).message).toContain("fakeField");
+      }
+    });
+  });
+
+  describe("view", () => {
+    it("returns detail with schema fields", async () => {
+      mockedGhJson.mockResolvedValue({
+        number: 42,
+        title: "My PR",
+        state: "OPEN",
+        author: { login: "alice" },
+        isDraft: false,
+        mergedAt: null,
+        statusCheckRollup: [],
+        body: "PR description here",
+        comments: [],
+      });
+
+      const result = await prCommand(["view", "42"], ctx);
+
+      expect(result).toContain("42");
+      expect(result).toContain("My PR");
+      expect(result).toContain("open");
+      expect(result).toContain("alice");
+    });
+
+    it("appends the detailed check rollup with --checks", async () => {
+      mockedGhJson.mockResolvedValue({
+        number: 42,
+        title: "My PR",
+        state: "OPEN",
+        author: { login: "alice" },
+        isDraft: false,
+        mergedAt: null,
+        statusCheckRollup: [
+          { name: "build", conclusion: "SUCCESS" },
+          { name: "lint", conclusion: "FAILURE" },
+        ],
+        body: "PR description here",
+        comments: [],
+        reviews: [],
+      });
+
+      const result = await prCommand(["view", "42", "--checks"], ctx);
+
+      expect(result).toContain("My PR");
+      expect(result).toContain("1 passed, 1 failed");
+      expect(result).toContain("lint,fail");
+    });
+    it("drops a superseded run from the view summary and --checks rows", async () => {
+      mockedGhJson.mockResolvedValue({
+        number: 42,
+        title: "My PR",
+        state: "OPEN",
+        author: { login: "alice" },
+        isDraft: false,
+        mergedAt: null,
+        statusCheckRollup: [
+          {
+            name: "lint",
+            workflowName: "CI",
+            conclusion: "FAILURE",
+            startedAt: "2026-01-01T10:00:00Z",
+          },
+          {
+            name: "lint",
+            workflowName: "CI",
+            conclusion: "SUCCESS",
+            startedAt: "2026-01-01T11:00:00Z",
+          },
+        ],
+        body: "",
+        comments: [],
+        reviews: [],
+      });
+
+      const result = await prCommand(["view", "42", "--checks"], ctx);
+
+      expect(result).toContain("1 passed, 0 failed");
+      expect(result).not.toContain("lint,fail");
+    });
+    it("shows a pending count in the view summary when checks are unfinished", async () => {
+      // The view summary field (no --checks) previously hid pending checks:
+      // a PR with only queued checks read "0 passed, 0 failed, 1 total".
+      mockedGhJson.mockResolvedValue({
+        number: 42,
+        title: "My PR",
+        state: "OPEN",
+        author: { login: "alice" },
+        isDraft: false,
+        mergedAt: null,
+        statusCheckRollup: [
+          { name: "build", conclusion: "SUCCESS" },
+          { name: "e2e", status: "QUEUED", conclusion: null },
+        ],
+        body: "PR description here",
+        comments: [],
+        reviews: [],
+      });
+
+      const result = await prCommand(["view", "42"], ctx);
+
+      expect(result).toContain("1 passed, 0 failed, 1 pending, 2 total");
+    });
+
+    it("omits the detailed check rollup without --checks", async () => {
+      mockedGhJson.mockResolvedValue({
+        number: 42,
+        title: "My PR",
+        state: "OPEN",
+        author: { login: "alice" },
+        isDraft: false,
+        mergedAt: null,
+        statusCheckRollup: [
+          { name: "build", conclusion: "SUCCESS" },
+          { name: "lint", conclusion: "FAILURE" },
+        ],
+        body: "PR description here",
+        comments: [],
+        reviews: [],
+      });
+
+      const result = await prCommand(["view", "42"], ctx);
+
+      expect(result).toContain("My PR");
+      expect(result).not.toContain("lint,fail");
+    });
+
+    it("omits help suggestions from detail view", async () => {
+      mockedGhJson.mockResolvedValue({
+        number: 42,
+        title: "My PR",
+        state: "OPEN",
+        author: { login: "alice" },
+        isDraft: false,
+        mergedAt: null,
+        statusCheckRollup: [],
+        body: "desc",
+        comments: [],
+      });
+      const result = await prCommand(["view", "42"], ctx);
+      expect(result).not.toMatch(/^help\[/m);
+    });
+
+    describe("merge_state", () => {
+      const openPr = {
+        number: 42,
+        title: "My PR",
+        state: "OPEN",
+        author: { login: "alice" },
+        isDraft: false,
+        mergedAt: null,
+        statusCheckRollup: [],
+        body: "desc",
+        comments: [],
+      };
+
+      it("requests mergeStateStatus and shows it after checks for an open PR", async () => {
+        mockedGhJson.mockResolvedValue({
+          ...openPr,
+          mergeStateStatus: "CLEAN",
+        });
+
+        const result = await prCommand(["view", "42"], ctx);
+
+        const jsonFields = mockedGhJson.mock.calls[0][0][4];
+        expect(jsonFields.split(",")).toContain("mergeStateStatus");
+        expect(result).toContain("merge_state: clean");
+        expect(result.indexOf("checks:")).toBeLessThan(
+          result.indexOf("merge_state:"),
+        );
+        expect(result.indexOf("merge_state:")).toBeLessThan(
+          result.indexOf("body:"),
+        );
+      });
+
+      it("explains a state that blocks merging", async () => {
+        mockedGhJson.mockResolvedValue({
+          ...openPr,
+          mergeStateStatus: "DIRTY",
+        });
+
+        const result = await prCommand(["view", "42"], ctx);
+
+        expect(result).toContain(
+          "dirty — merge conflicts with the base branch",
+        );
+      });
+
+      it("points a behind PR at a runnable update-branch command", async () => {
+        mockedGhJson.mockResolvedValue({
+          ...openPr,
+          mergeStateStatus: "BEHIND",
+        });
+
+        const result = await prCommand(["view", "42"], ctx);
+
+        expect(result).toContain("gh-axi pr update-branch 42 -R octo/repo");
+      });
+
+      it("prints a bare update-branch command for a git-source repo", async () => {
+        mockedGhJson.mockResolvedValue({
+          ...openPr,
+          mergeStateStatus: "BEHIND",
+        });
+
+        const result = await prCommand(["view", "42"], {
+          ...ctx,
+          source: "git",
+        });
+
+        expect(result).toContain(
+          "gh-axi pr update-branch 42 brings it up to date",
+        );
+        expect(result).not.toContain("update-branch 42 -R");
+      });
+
+      it("keeps an explicit --hostname on the update-branch command", async () => {
+        mockedGhJson.mockResolvedValue({
+          ...openPr,
+          mergeStateStatus: "BEHIND",
+        });
+
+        const result = await prCommand(["view", "42"], {
+          ...ctx,
+          host: { value: "ghe.example.com", source: "flag" },
+        });
+
+        expect(result).toContain(
+          "gh-axi pr update-branch 42 -R octo/repo --hostname ghe.example.com brings",
+        );
+      });
+
+      it("reports unknown with a retry hint while GitHub is computing", async () => {
+        mockedGhJson.mockResolvedValue(openPr);
+
+        const result = await prCommand(["view", "42"], ctx);
+
+        expect(result).toContain("unknown — GitHub is still computing");
+      });
+
+      it("keeps merge_state in --full output", async () => {
+        mockedGhJson.mockResolvedValue({
+          ...openPr,
+          mergeStateStatus: "BLOCKED",
+        });
+
+        const result = await prCommand(["view", "42", "--full"], ctx);
+
+        expect(result).toContain("blocked — blocked by branch protection");
+      });
+
+      it("omits merge_state for a merged PR", async () => {
+        mockedGhJson.mockResolvedValue({
+          ...openPr,
+          state: "MERGED",
+          mergedAt: "2026-09-01T00:00:00Z",
+          mergeStateStatus: "UNKNOWN",
+        });
+
+        const result = await prCommand(["view", "42"], ctx);
+
+        expect(result).not.toContain("merge_state");
+      });
+    });
+
+    it("shows review_count summary when --reviews is not passed", async () => {
+      mockedGhJson.mockResolvedValue({
+        number: 42,
+        title: "My PR",
+        state: "OPEN",
+        author: { login: "alice" },
+        isDraft: false,
+        mergedAt: null,
+        statusCheckRollup: [],
+        body: "desc",
+        comments: [],
+        reviews: [{ id: "PRR_1" }, { id: "PRR_2" }],
+      });
+
+      const result = await prCommand(["view", "42"], ctx);
+
+      expect(result).toContain("review_count: 2");
+      expect(result).toContain("use --reviews to see full reviews");
+    });
+
+    it("lists review submissions and inline comments with --reviews", async () => {
+      mockedGhJson
+        .mockResolvedValueOnce({
+          number: 42,
+          title: "My PR",
+          state: "OPEN",
+          author: { login: "alice" },
+          isDraft: false,
+          mergedAt: null,
+          statusCheckRollup: [],
+          body: "desc",
+          comments: [],
+          reviews: [{ id: "PRR_1" }],
+        })
+        .mockResolvedValueOnce([
+          {
+            id: 1001,
+            user: { login: "cursor[bot]" },
+            body: "Found 2 issues",
+            state: "COMMENTED",
+            submitted_at: "2026-04-01T00:00:00Z",
+          },
+          {
+            id: 1002,
+            user: { login: "reviewer" },
+            body: "",
+            state: "APPROVED",
+            submitted_at: "2026-04-02T00:00:00Z",
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            pull_request_review_id: 1001,
+            user: { login: "cursor[bot]" },
+            path: "src/foo.ts",
+            line: 42,
+            body: "This could be null",
+            created_at: "2026-04-01T00:00:00Z",
+          },
+          {
+            pull_request_review_id: 1001,
+            user: { login: "cursor[bot]" },
+            path: "src/bar.ts",
+            line: null,
+            original_line: 7,
+            body: "Off-by-one bug",
+            created_at: "2026-04-01T00:00:00Z",
+          },
+        ]);
+
+      const result = await prCommand(["view", "42", "--reviews"], ctx);
+
+      // Review submissions surfaced
+      expect(result).toContain("cursor[bot]");
+      expect(result).toContain("commented");
+      expect(result).toContain("Found 2 issues");
+      expect(result).toContain("approved");
+      // Inline comments surfaced under the right review
+      expect(result).toContain("src/foo.ts");
+      expect(result).toContain("This could be null");
+      expect(result).toContain("src/bar.ts");
+      expect(result).toContain("Off-by-one bug");
+      // review_count is replaced by full reviews block
+      expect(result).not.toContain("use --reviews to see full reviews");
+
+      // Verify REST endpoints were used
+      const apiCalls = mockedGhJson.mock.calls.map((c) => c[0]);
+      expect(
+        apiCalls.some(
+          (a) =>
+            Array.isArray(a) &&
+            a.includes("api") &&
+            (a as string[]).some((s) => s.includes("/pulls/42/reviews")),
+        ),
+      ).toBe(true);
+      expect(
+        apiCalls.some(
+          (a) =>
+            Array.isArray(a) &&
+            a.includes("api") &&
+            (a as string[]).some((s) => s.includes("/pulls/42/comments")),
+        ),
+      ).toBe(true);
+    });
+
+    it("uses explicit REST paths without repo context for review fetches", async () => {
+      mockedGhJson
+        .mockResolvedValueOnce({
+          number: 42,
+          title: "My PR",
+          state: "OPEN",
+          author: { login: "alice" },
+          isDraft: false,
+          mergedAt: null,
+          statusCheckRollup: [],
+          body: "desc",
+          comments: [],
+          reviews: [],
+        })
+        .mockResolvedValueOnce([]);
+
+      await prCommand(["view", "42", "--reviews"], ctx);
+
+      expect(mockedGhJson).toHaveBeenNthCalledWith(2, [
+        "api",
+        "repos/octo/repo/pulls/42/reviews",
+        "--paginate",
+        "--slurp",
+      ]);
+    });
+
+    it("flattens paginated review and inline comment pages", async () => {
+      mockedGhJson
+        .mockResolvedValueOnce({
+          number: 42,
+          title: "My PR",
+          state: "OPEN",
+          author: { login: "alice" },
+          isDraft: false,
+          mergedAt: null,
+          statusCheckRollup: [],
+          body: "desc",
+          comments: [],
+          reviews: [{ id: "PRR_1" }],
+        })
+        .mockResolvedValueOnce([
+          [
+            {
+              id: 3001,
+              user: { login: "erin" },
+              body: "page one review",
+              state: "COMMENTED",
+              submitted_at: "2026-04-04T00:00:00Z",
+            },
+          ],
+          [
+            {
+              id: 3002,
+              user: { login: "frank" },
+              body: "page two review",
+              state: "APPROVED",
+              submitted_at: "2026-04-05T00:00:00Z",
+            },
+          ],
+        ])
+        .mockResolvedValueOnce([
+          [
+            {
+              pull_request_review_id: 3001,
+              user: { login: "erin" },
+              path: "src/a.ts",
+              line: 10,
+              body: "page one comment",
+              created_at: "2026-04-04T00:00:00Z",
+            },
+          ],
+          [
+            {
+              pull_request_review_id: 3002,
+              user: { login: "frank" },
+              path: "src/b.ts",
+              line: 20,
+              body: "page two comment",
+              created_at: "2026-04-05T00:00:00Z",
+            },
+          ],
+        ]);
+
+      const result = await prCommand(["view", "42", "--reviews"], ctx);
+
+      expect(result).toContain("page one review");
+      expect(result).toContain("page two review");
+      expect(result).toContain("page one comment");
+      expect(result).toContain("page two comment");
+    });
+
+    it("skips inline-comment fetch when there are no reviews", async () => {
+      mockedGhJson
+        .mockResolvedValueOnce({
+          number: 42,
+          title: "My PR",
+          state: "OPEN",
+          author: { login: "alice" },
+          isDraft: false,
+          mergedAt: null,
+          statusCheckRollup: [],
+          body: "desc",
+          comments: [],
+          reviews: [],
+        })
+        .mockResolvedValueOnce([]); // empty reviews from REST
+
+      const result = await prCommand(["view", "42", "--reviews"], ctx);
+
+      // Two calls only: pr view --json and pulls/42/reviews. No comments call.
+      expect(mockedGhJson).toHaveBeenCalledTimes(2);
+      expect(result).toContain("reviews");
+    });
+
+    it("renders both comments and reviews when --comments --reviews are combined", async () => {
+      mockedGhJson
+        .mockResolvedValueOnce({
+          number: 42,
+          title: "My PR",
+          state: "OPEN",
+          author: { login: "alice" },
+          isDraft: false,
+          mergedAt: null,
+          statusCheckRollup: [],
+          body: "desc",
+          comments: [
+            {
+              author: { login: "carol" },
+              body: "top-level chat",
+              createdAt: "2026-04-01T00:00:00Z",
+            },
+          ],
+          reviews: [{ id: "PRR_1" }],
+        })
+        .mockResolvedValueOnce([
+          {
+            id: 2001,
+            user: { login: "dave" },
+            body: "lgtm with nits",
+            state: "CHANGES_REQUESTED",
+            submitted_at: "2026-04-03T00:00:00Z",
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            pull_request_review_id: 2001,
+            user: { login: "dave" },
+            path: "README.md",
+            line: 1,
+            body: "fix typo",
+            created_at: "2026-04-03T00:00:00Z",
+          },
+        ]);
+
+      const result = await prCommand(
+        ["view", "42", "--comments", "--reviews"],
+        ctx,
+      );
+
+      expect(result).toContain("top-level chat");
+      expect(result).toContain("carol");
+      expect(result).toContain("lgtm with nits");
+      expect(result).toContain("changes_requested");
+      expect(result).toContain("fix typo");
+      expect(result).not.toContain("use --comments to see full comments");
+      expect(result).not.toContain("use --reviews to see full reviews");
+    });
+  });
+
+  describe("list and create with repeatable flags", () => {
+    it("passes all repeated --label filters to gh pr list", async () => {
+      mockedGhJson.mockResolvedValue([]);
+
+      await prCommand(["list", "--label", "bug", "--label", "chore"], ctx);
+
+      expect(mockedGhJson.mock.calls[0][0]).toEqual([
+        "pr",
+        "list",
+        "--json",
+        "number,title,state,author,isDraft,reviewDecision",
+        "--state",
+        "open",
+        "--limit",
+        "30",
+        "--label",
+        "bug",
+        "--label",
+        "chore",
+      ]);
+    });
+
+    it("passes all repeated --project flags to gh pr create", async () => {
+      mockedGhExec.mockResolvedValue("https://github.com/octo/repo/pull/7\n");
+
+      await prCommand(
+        ["create", "--title", "T", "--project", "Roadmap", "--project", "Q3"],
+        ctx,
+      );
+
+      expect(mockedGhExec.mock.calls[0][0]).toEqual([
+        "pr",
+        "create",
+        "--title",
+        "T",
+        "--project",
+        "Roadmap",
+        "--project",
+        "Q3",
+      ]);
+    });
+
+    it("rejects an empty --label value instead of dropping it", async () => {
+      await expect(prCommand(["list", "--label="], ctx)).rejects.toThrow(
+        "--label requires a value",
+      );
+      expect(mockedGhJson).not.toHaveBeenCalled();
+    });
+
+    it.each(["--assignee", "--author", "--base", "--head"])(
+      "rejects an empty %s filter instead of listing unfiltered",
+      async (flag) => {
+        for (const argv of [
+          ["list", `${flag}=`],
+          ["list", `${flag}=  `],
+          ["list", flag],
+        ]) {
+          const err = await prCommand(argv, ctx).catch((e: unknown) => e);
+          expect(err).toBeInstanceOf(AxiError);
+          expect((err as AxiError).code).toBe("VALIDATION_ERROR");
+          expect((err as AxiError).message).toBe(`${flag} requires a value`);
+        }
+        expect(mockedGhJson).not.toHaveBeenCalled();
+      },
+    );
+
+    it("still forwards non-empty single-value list filters", async () => {
+      mockedGhJson.mockResolvedValue([]);
+
+      await prCommand(
+        [
+          "list",
+          "--assignee=octocat",
+          "--author",
+          "hubot",
+          "--base=main",
+          "--head",
+          "feature",
+        ],
+        ctx,
+      );
+
+      const ghArgs = mockedGhJson.mock.calls[0][0];
+      expect(ghArgs).toEqual(
+        expect.arrayContaining([
+          "--assignee",
+          "octocat",
+          "--author",
+          "hubot",
+          "--base",
+          "main",
+          "--head",
+          "feature",
+        ]),
+      );
+    });
+  });
+
+  describe("edit with repeatable flags", () => {
+    it("passes all repeated --add-label flags to gh pr edit", async () => {
+      mockedGhExec.mockResolvedValue("");
+
+      await prCommand(
+        ["edit", "42", "--add-label", "bug", "--add-label", "ready-for-agent"],
+        ctx,
+      );
+
+      expect(mockedGhExec.mock.calls[0][0]).toEqual([
+        "pr",
+        "edit",
+        "42",
+        "--add-label",
+        "bug",
+        "--add-label",
+        "ready-for-agent",
+      ]);
+    });
+
+    it("passes all repeated --remove-label flags to gh pr edit", async () => {
+      mockedGhExec.mockResolvedValue("");
+
+      await prCommand(
+        [
+          "edit",
+          "42",
+          "--remove-label",
+          "needs-triage",
+          "--remove-label",
+          "needs-info",
+        ],
+        ctx,
+      );
+
+      expect(mockedGhExec.mock.calls[0][0]).toEqual([
+        "pr",
+        "edit",
+        "42",
+        "--remove-label",
+        "needs-triage",
+        "--remove-label",
+        "needs-info",
+      ]);
+    });
+
+    it("passes all repeated assignee and reviewer flags to gh pr edit", async () => {
+      mockedGhExec.mockResolvedValue("");
+
+      await prCommand(
+        [
+          "edit",
+          "42",
+          "--add-assignee",
+          "octocat",
+          "--add-assignee",
+          "hubot",
+          "--remove-assignee",
+          "monalisa",
+          "--remove-assignee",
+          "ghost",
+          "--add-reviewer",
+          "alice",
+          "--add-reviewer",
+          "bob",
+          "--remove-reviewer",
+          "carol",
+          "--remove-reviewer",
+          "dave",
+        ],
+        ctx,
+      );
+
+      expect(mockedGhExec.mock.calls[0][0]).toEqual([
+        "pr",
+        "edit",
+        "42",
+        "--add-assignee",
+        "octocat",
+        "--add-assignee",
+        "hubot",
+        "--remove-assignee",
+        "monalisa",
+        "--remove-assignee",
+        "ghost",
+        "--add-reviewer",
+        "alice",
+        "--add-reviewer",
+        "bob",
+        "--remove-reviewer",
+        "carol",
+        "--remove-reviewer",
+        "dave",
+      ]);
+    });
+
+    it("still passes a single --add-label correctly (no regression)", async () => {
+      mockedGhExec.mockResolvedValue("");
+
+      await prCommand(["edit", "42", "--add-label", "bug"], ctx);
+
+      expect(mockedGhExec.mock.calls[0][0]).toEqual([
+        "pr",
+        "edit",
+        "42",
+        "--add-label",
+        "bug",
+      ]);
+    });
+  });
+
+  describe("create base/head output", () => {
+    it("reports the base and head the PR was created with", async () => {
+      mockedGhExec.mockResolvedValue("https://github.com/o/r/pull/42\n");
+      mockedGhJson.mockResolvedValue({
+        baseRefName: "main",
+        headRefName: "feature-x",
+      });
+
+      const result = await prCommand(["create", "--title", "T"], ctx);
+
+      expect(result).toContain("number: 42");
+      expect(result).toContain("base: main");
+      expect(result).toContain("head: feature-x");
+      // The ref lookup must target the PR number parsed from the created URL
+      // and request exactly the fields the output renders.
+      expect(mockedGhJson).toHaveBeenCalledWith(
+        ["pr", "view", "42", "--json", "baseRefName,headRefName"],
+        ctx,
+      );
+    });
+
+    it("reports an explicit --base and --head without a follow-up lookup", async () => {
+      mockedGhExec.mockResolvedValue("https://github.com/o/r/pull/42\n");
+
+      const result = await prCommand(
+        ["create", "--title", "T", "--base", "stack-a", "--head", "stack-b"],
+        ctx,
+      );
+
+      expect(result).toContain("base: stack-a");
+      expect(result).toContain("head: stack-b");
+      expect(mockedGhJson).not.toHaveBeenCalled();
+    });
+
+    it("still reports the created PR when the ref lookup fails", async () => {
+      mockedGhExec.mockResolvedValue("https://github.com/o/r/pull/42\n");
+      mockedGhJson.mockRejectedValue(new Error("boom"));
+
+      const result = await prCommand(["create", "--title", "T"], ctx);
+
+      expect(result).toContain("number: 42");
+      expect(result).toContain("base: null");
+    });
+  });
+
+  describe("create with repeatable flags", () => {
+    it("passes all repeated --assignee and --reviewer flags to gh pr create", async () => {
+      mockedGhExec.mockResolvedValue("https://github.com/o/r/pull/42\n");
+
+      await prCommand(
+        [
+          "create",
+          "--title",
+          "T",
+          "--assignee",
+          "octocat",
+          "--assignee",
+          "hubot",
+          "--reviewer",
+          "alice",
+          "--reviewer",
+          "bob",
+        ],
+        ctx,
+      );
+
+      expect(mockedGhExec.mock.calls[0][0]).toEqual([
+        "pr",
+        "create",
+        "--title",
+        "T",
+        "--assignee",
+        "octocat",
+        "--assignee",
+        "hubot",
+        "--reviewer",
+        "alice",
+        "--reviewer",
+        "bob",
+      ]);
+    });
+  });
+
+  describe("close", () => {
+    it("returns already closed when PR is already closed (idempotent)", async () => {
+      mockedGhJson.mockResolvedValue({ state: "CLOSED" });
+
+      const result = await prCommand(["close", "10"], ctx);
+
+      expect(result).toContain("closed");
+      expect(result).toContain("already");
+      expect(mockedGhExec).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("review", () => {
+    const head = "0123456789abcdef0123456789abcdef01234567";
+    const reviewPath = "repos/octo/repo/pulls/10/reviews";
+
+    it("keeps the plain gh pr review call without --match-head-commit", async () => {
+      mockedGhExec.mockResolvedValue("");
+
+      const result = await prCommand(
+        ["review", "10", "--approve", "--body", "ok"],
+        ctx,
+      );
+
+      expect(mockedGhExec).toHaveBeenCalledWith(
+        ["pr", "review", "10", "--approve", "--body", "ok"],
+        ctx,
+      );
+      expect(mockedGhJson).not.toHaveBeenCalled();
+      expect(result).toContain("action: approved");
+    });
+
+    it.each([
+      ["--approve", "APPROVE", "approved"],
+      ["--request-changes", "REQUEST_CHANGES", "changes_requested"],
+      ["--comment", "COMMENT", "commented"],
+    ])(
+      "sends %s on the matched head commit through the reviews API",
+      async (flag, event, action) => {
+        mockedGhJson.mockResolvedValue({ headRefOid: head });
+        mockedGhExec.mockResolvedValue("");
+
+        const result = await prCommand(
+          [
+            "review",
+            "10",
+            flag,
+            "--body",
+            "looks good",
+            "--match-head-commit",
+            head,
+          ],
+          ctx,
+        );
+
+        expect(mockedGhJson).toHaveBeenCalledWith(
+          ["pr", "view", "10", "--json", "headRefOid"],
+          ctx,
+        );
+        expect(mockedGhExec).toHaveBeenCalledWith([
+          "api",
+          reviewPath,
+          "--method",
+          "POST",
+          "--raw-field",
+          `event=${event}`,
+          "--raw-field",
+          `commit_id=${head}`,
+          "--raw-field",
+          "body=looks good",
+        ]);
+        expect(result).toContain(`action: ${action}`);
+      },
+    );
+
+    it("accepts an uppercase SHA and posts the returned head", async () => {
+      mockedGhJson.mockResolvedValue({ headRefOid: head });
+      mockedGhExec.mockResolvedValue("");
+
+      await prCommand(
+        [
+          "review",
+          "10",
+          "--approve",
+          "--match-head-commit",
+          head.toUpperCase(),
+        ],
+        ctx,
+      );
+
+      expect(mockedGhExec).toHaveBeenCalledWith([
+        "api",
+        reviewPath,
+        "--method",
+        "POST",
+        "--raw-field",
+        "event=APPROVE",
+        "--raw-field",
+        `commit_id=${head}`,
+      ]);
+    });
+
+    it("refuses and names the present head when it differs", async () => {
+      const present = "fedcba9876543210fedcba9876543210fedcba98";
+      mockedGhJson.mockResolvedValue({ headRefOid: present });
+
+      await expect(
+        prCommand(
+          ["review", "10", "--approve", "--match-head-commit", head],
+          ctx,
+        ),
+      ).rejects.toThrow(present);
+      expect(mockedGhExec).not.toHaveBeenCalled();
+    });
+
+    it("requires exactly one review action with --match-head-commit", async () => {
+      await expect(
+        prCommand(["review", "10", "--match-head-commit", head], ctx),
+      ).rejects.toThrow("exactly one of");
+      await expect(
+        prCommand(
+          [
+            "review",
+            "10",
+            "--approve",
+            "--comment",
+            "--match-head-commit",
+            head,
+          ],
+          ctx,
+        ),
+      ).rejects.toThrow("exactly one of");
+      expect(mockedGhJson).not.toHaveBeenCalled();
+      expect(mockedGhExec).not.toHaveBeenCalled();
+    });
+
+    it("rejects a head commit condition without a value", async () => {
+      await expect(
+        prCommand(["review", "10", "--approve", "--match-head-commit"], ctx),
+      ).rejects.toThrow("--match-head-commit requires a value");
+      expect(mockedGhExec).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("merge", () => {
+    it("returns already merged when PR is already merged (idempotent)", async () => {
+      mockedGhJson.mockResolvedValue({
+        state: "MERGED",
+        mergedBy: { login: "alice" },
+        mergedAt: "2024-01-01T00:00:00Z",
+      });
+
+      const result = await prCommand(["merge", "10"], ctx);
+
+      expect(result).toContain("merged");
+      expect(result).toContain("alice");
+      expect(mockedGhExec).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["--squash", "--squash", "squash"],
+      ["--merge", "--merge", "merge"],
+      ["--rebase", "--rebase", "rebase"],
+    ])(
+      "maps %s shorthand to a gh merge method flag",
+      async (input, ghFlag, method) => {
+        mockMerge();
+
+        const result = await prCommand(
+          ["merge", "10", input, "--delete-branch"],
+          ctx,
+        );
+
+        expect(mockedGhExec).toHaveBeenCalledWith(
+          ["pr", "merge", "10", ghFlag, "--delete-branch"],
+          ctx,
+        );
+        expect(result).toContain(`method: ${method}`);
+      },
+    );
+
+    it("keeps --method working", async () => {
+      mockMerge();
+
+      await prCommand(["merge", "10", "--method", "squash"], ctx);
+
+      expect(mockedGhExec).toHaveBeenCalledWith(
+        ["pr", "merge", "10", "--squash"],
+        ctx,
+      );
+    });
+
+    it("forwards --admin to gh and records the bypass", async () => {
+      mockMerge();
+
+      const result = await prCommand(["merge", "10", "--admin"], ctx);
+
+      expect(mockedGhExec).toHaveBeenCalledWith(
+        ["pr", "merge", "10", "--admin"],
+        ctx,
+      );
+      expect(result).toContain("admin: yes");
+    });
+
+    it("reports admin: no when the flag is absent", async () => {
+      mockMerge();
+
+      const result = await prCommand(["merge", "10", "--squash"], ctx);
+
+      expect(result).toContain("admin: no");
+    });
+
+    it("composes --admin with a merge method, --delete-branch and commit text", async () => {
+      mockMerge();
+
+      await prCommand(
+        [
+          "merge",
+          "10",
+          "--squash",
+          "--admin",
+          "--delete-branch",
+          "--subject",
+          "ship it",
+          "--body",
+          "why",
+        ],
+        ctx,
+      );
+
+      expect(mockedGhExec).toHaveBeenCalledWith(
+        [
+          "pr",
+          "merge",
+          "10",
+          "--squash",
+          "--admin",
+          "--delete-branch",
+          "--body",
+          "why",
+          "--subject",
+          "ship it",
+        ],
+        ctx,
+      );
+    });
+
+    it("forwards an exact head commit condition with the selected merge options", async () => {
+      const head = "0123456789abcdef0123456789abcdef01234567";
+      mockMerge();
+
+      await prCommand(
+        [
+          "merge",
+          "10",
+          "--squash",
+          "--delete-branch",
+          "--match-head-commit",
+          head,
+        ],
+        ctx,
+      );
+
+      expect(mockedGhExec).toHaveBeenCalledWith(
+        [
+          "pr",
+          "merge",
+          "10",
+          "--squash",
+          "--delete-branch",
+          "--match-head-commit",
+          head,
+        ],
+        ctx,
+      );
+    });
+
+    it.each([
+      ["--match-head-commit"],
+      ["--match-head-commit="],
+      ["--match-head-commit", "--auto"],
+    ])("rejects a head commit condition without a value", async (...flags) => {
+      await expect(prCommand(["merge", "10", ...flags], ctx)).rejects.toThrow(
+        "--match-head-commit requires a value",
+      );
+      expect(mockedGhJson).not.toHaveBeenCalled();
+      expect(mockedGhExec).not.toHaveBeenCalled();
+    });
+
+    it("rejects a repeated head commit condition instead of silently choosing one", async () => {
+      await expect(
+        prCommand(
+          [
+            "merge",
+            "10",
+            "--match-head-commit",
+            "0123456789abcdef0123456789abcdef01234567",
+            "--match-head-commit=fedcba9876543210fedcba9876543210fedcba987",
+          ],
+          ctx,
+        ),
+      ).rejects.toThrow("--match-head-commit may only be given once");
+      expect(mockedGhJson).not.toHaveBeenCalled();
+      expect(mockedGhExec).not.toHaveBeenCalled();
+    });
+
+    it("still rejects an unknown merge flag", async () => {
+      await expect(prCommand(["merge", "10", "--bogus"], ctx)).rejects.toThrow(
+        /unknown flag for gh-axi pr merge: --bogus/,
+      );
+    });
+
+    it("rejects --admin combined with --auto, matching gh", async () => {
+      mockedGhJson.mockResolvedValue({ state: "OPEN" });
+
+      await expect(
+        prCommand(["merge", "10", "--auto", "--admin"], ctx),
+      ).rejects.toThrow(/Choose either --auto or --admin/);
+      expect(mockedGhExec).not.toHaveBeenCalled();
+    });
+
+    it("never enables --admin on its own when gh refuses the merge", async () => {
+      mockedGhJson.mockResolvedValue({ state: "OPEN" });
+      mockedGhExec.mockRejectedValue(
+        new AxiError("Pull request is not mergeable", "CONFLICT"),
+      );
+
+      await expect(prCommand(["merge", "10"], ctx)).rejects.toThrow(
+        "Pull request is not mergeable",
+      );
+      expect(mockedGhExec).toHaveBeenCalledTimes(1);
+      expect(mockedGhExec).toHaveBeenCalledWith(["pr", "merge", "10"], ctx);
+    });
+
+    it("forwards a bare --auto to gh", async () => {
+      mockMerge();
+
+      await prCommand(["merge", "10", "--auto"], ctx);
+
+      expect(mockedGhExec).toHaveBeenCalledWith(
+        ["pr", "merge", "10", "--auto"],
+        ctx,
+      );
+    });
+
+    it.each([
+      "--admin=true",
+      "--auto=true",
+      "--squash=true",
+      "--merge=true",
+      "--rebase=true",
+      "--delete-branch=false",
+    ])("rejects the %s form instead of dropping it", async (token) => {
+      mockMerge();
+
+      const flag = token.split("=")[0];
+      await expect(prCommand(["merge", "10", token], ctx)).rejects.toThrow(
+        `${token} is not supported: ${flag} is an on/off flag`,
+      );
+      expect(mockedGhJson).not.toHaveBeenCalled();
+      expect(mockedGhExec).not.toHaveBeenCalled();
+    });
+
+    it("rejects --admin=true even when another switch would merge", async () => {
+      mockMerge();
+
+      await expect(
+        prCommand(["merge", "10", "--squash", "--admin=true"], ctx),
+      ).rejects.toThrow("--admin=true is not supported");
+      expect(mockedGhExec).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["--body", "--admin=true"],
+      ["--subject", "--admin=true"],
+      ["--subject", "--auto=true"],
+    ])(
+      "rejects %s %s instead of using the switch as text",
+      async (option, token) => {
+        mockMerge();
+
+        await expect(
+          prCommand(["merge", "10", option, token], ctx),
+        ).rejects.toThrow(`${token} is not supported`);
+        expect(mockedGhJson).not.toHaveBeenCalled();
+        expect(mockedGhExec).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([[[]], [["--auto"]], [["--admin"]]])(
+      "reports enqueued, not merged, when gh %j only queued the PR",
+      async (flags) => {
+        mockMerge({
+          state: "OPEN",
+          isInMergeQueue: true,
+          autoMergeRequest: null,
+        });
+
+        const result = await prCommand(["merge", "10", ...flags], ctx);
+
+        expect(mockedGhJson).toHaveBeenLastCalledWith([
+          "api",
+          "graphql",
+          "-f",
+          "id=PR_node",
+          "-f",
+          expect.stringContaining("isInMergeQueue"),
+        ]);
+        expect(result).toContain("merge:");
+        expect(result).toContain("status: enqueued");
+        expect(result).not.toMatch(/^merged:|status: (merged|ok)/m);
+        expect(result).not.toContain("revert");
+        expect(result).toContain("pr view 10 -R octo/repo");
+      },
+    );
+
+    it("reports auto-merge when gh only enabled auto-merge", async () => {
+      mockMerge({
+        state: "OPEN",
+        isInMergeQueue: false,
+        autoMergeRequest: { enabledAt: "2026-10-10T00:00:00Z" },
+      });
+
+      const result = await prCommand(["merge", "10", "--auto"], ctx);
+
+      expect(result).toContain("status: auto-merge");
+      expect(result).not.toContain("status: ok");
+    });
+
+    it("reports merged once the re-read confirms it", async () => {
+      mockMerge({ state: "MERGED" });
+
+      const result = await prCommand(["merge", "10", "--admin"], ctx);
+
+      expect(result).toContain("status: merged");
+      expect(result).toContain("revert");
+    });
+
+    it("reports enqueued over auto-merge when the PR is in the queue", async () => {
+      mockMerge({
+        state: "OPEN",
+        isInMergeQueue: true,
+        autoMergeRequest: { enabledAt: "2026-10-10T00:00:00Z" },
+      });
+
+      const result = await prCommand(["merge", "10"], ctx);
+
+      expect(result).toContain("status: enqueued");
+      expect(result).not.toContain("status: auto-merge");
+    });
+
+    it("reports merged over enqueued and auto-merge once the PR merged", async () => {
+      mockMerge({
+        state: "MERGED",
+        isInMergeQueue: true,
+        autoMergeRequest: { enabledAt: "2026-10-10T00:00:00Z" },
+      });
+
+      const result = await prCommand(["merge", "10"], ctx);
+
+      expect(result).toContain("status: merged");
+      expect(result).not.toMatch(/status: (enqueued|auto-merge)/);
+    });
+
+    it("fails when gh exited 0 but the PR is neither merged, queued nor set to auto-merge", async () => {
+      mockMerge({
+        state: "OPEN",
+        isInMergeQueue: false,
+        autoMergeRequest: null,
+      });
+
+      await expect(prCommand(["merge", "10", "--auto"], ctx)).rejects.toThrow(
+        "gh pr merge exited 0, but PR #10 is open: not merged, not in a merge queue, and auto-merge is not enabled",
+      );
+    });
+
+    it("reports a failed re-read as a follow-up failure, not a failed merge", async () => {
+      mockedGhJson.mockImplementation(async (args: string[]) => {
+        if (args[0] === "api") throw new AxiError("HTTP 502", "UNKNOWN");
+        return { state: "OPEN", id: "PR_node" };
+      });
+      mockedGhExec.mockResolvedValue("");
+
+      await expect(prCommand(["merge", "10"], ctx)).rejects.toThrow(
+        "Mutation succeeded at PR #10, but follow-up operation failed: HTTP 502",
+      );
+    });
+
+    it("keeps value-taking merge flags working in the --flag=value form", async () => {
+      mockMerge();
+
+      await prCommand(
+        ["merge", "10", "--method=squash", "--body=why", "--subject=ship it"],
+        ctx,
+      );
+
+      expect(mockedGhExec).toHaveBeenCalledWith(
+        [
+          "pr",
+          "merge",
+          "10",
+          "--squash",
+          "--body",
+          "why",
+          "--subject",
+          "ship it",
+        ],
+        ctx,
+      );
+    });
+  });
+
+  describe("--body-file", () => {
+    const markdownBody = "summary\n```ts\nconst quoted = true;\n```\nIt's ok.";
+
+    it("uses file contents for pr create", async () => {
+      await withBodyFile(markdownBody, async (file) => {
+        mockedGhExec.mockResolvedValue(
+          "https://github.com/octo/repo/pull/123\n",
+        );
+
+        await prCommand(
+          ["create", "--title", "New PR", "--body-file", file],
+          ctx,
+        );
+
+        expect(mockedGhExec).toHaveBeenCalledWith(
+          ["pr", "create", "--title", "New PR", "--body", markdownBody],
+          ctx,
+        );
+      });
+    });
+
+    it("uses file contents for pr edit", async () => {
+      await withBodyFile(markdownBody, async (file) => {
+        mockedGhExec.mockResolvedValue("");
+
+        await prCommand(["edit", "123", "--body-file", file], ctx);
+
+        expect(mockedGhExec).toHaveBeenCalledWith(
+          ["pr", "edit", "123", "--body", markdownBody],
+          ctx,
+        );
+      });
+    });
+
+    it("uses file contents for pr merge", async () => {
+      await withBodyFile(markdownBody, async (file) => {
+        mockMerge();
+
+        await prCommand(["merge", "123", "--squash", "--body-file", file], ctx);
+
+        expect(mockedGhExec).toHaveBeenCalledWith(
+          ["pr", "merge", "123", "--squash", "--body", markdownBody],
+          ctx,
+        );
+      });
+    });
+
+    it("uses file contents for pr review", async () => {
+      await withBodyFile(markdownBody, async (file) => {
+        mockedGhExec.mockResolvedValue("");
+
+        await prCommand(
+          ["review", "123", "--comment", "--body-file", file],
+          ctx,
+        );
+
+        expect(mockedGhExec).toHaveBeenCalledWith(
+          ["pr", "review", "123", "--comment", "--body", markdownBody],
+          ctx,
+        );
+      });
+    });
+
+    it("uses file contents for pr comment", async () => {
+      await withBodyFile(markdownBody, async (file) => {
+        mockedGhExec.mockResolvedValue("");
+
+        await prCommand(["comment", "123", "--body-file", file], ctx);
+
+        expect(mockedGhExec).toHaveBeenCalledWith(
+          ["pr", "comment", "123", "--body", markdownBody],
+          ctx,
+        );
+      });
+    });
+
+    it("rejects --body and --body-file together before calling gh", async () => {
+      await withBodyFile(markdownBody, async (file) => {
+        await expect(
+          prCommand(
+            ["comment", "123", "--body", "inline", "--body-file", file],
+            ctx,
+          ),
+        ).rejects.toThrow(/Use only one body source/);
+        expect(mockedGhExec).not.toHaveBeenCalled();
+      });
+    });
+
+    it("reads piped stdin for --body-file - through the router", async () => {
+      vi.mocked(isStdinTTY).mockReturnValue(false);
+      vi.mocked(readStdinSync).mockReturnValue(markdownBody);
+      mockedGhExec.mockResolvedValue("https://github.com/octo/repo/pull/123\n");
+
+      await prCommand(["create", "--title", "New PR", "--body-file", "-"], ctx);
+
+      expect(mockedGhExec).toHaveBeenCalledWith(
+        ["pr", "create", "--title", "New PR", "--body", markdownBody],
+        ctx,
+      );
+    });
+
+    it("refuses --body-file - on an interactive TTY before calling gh", async () => {
+      vi.mocked(isStdinTTY).mockReturnValue(true);
+
+      await expect(
+        prCommand(["comment", "123", "--body-file", "-"], ctx),
+      ).rejects.toThrow("--body-file - requires content piped via stdin");
+      expect(vi.mocked(readStdinSync)).not.toHaveBeenCalled();
+      expect(mockedGhExec).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("checks", () => {
+    afterEach(() => {
+      process.exitCode = undefined;
+      vi.useRealTimers();
+    });
+
+    it("reports an empty rollup without claiming CI is not configured", async () => {
+      mockedGhJson.mockResolvedValue({ statusCheckRollup: [] });
+
+      const result = await prCommand(["checks", "5"], ctx);
+
+      expect(result).toContain(
+        "no check results reported for the PR head commit",
+      );
+      expect(result).not.toContain("no CI checks configured");
+      expect(result).toContain("run list --commit <head-sha>");
+      // gh pr checks fails when no checks are reported.
+      expect(process.exitCode).toBe(1);
+    });
+
+    it("exits 0 when every check passed or was skipped", async () => {
+      mockedGhJson.mockResolvedValue({
+        statusCheckRollup: [
+          { name: "build", conclusion: "SUCCESS" },
+          { name: "docs", conclusion: "SKIPPED" },
+          { name: "flaky", conclusion: "CANCELLED" },
+        ],
+      });
+
+      await prCommand(["checks", "5"], ctx);
+
+      expect(process.exitCode).toBeUndefined();
+    });
+
+    it("exits 1 when a check failed, even with another pending", async () => {
+      mockedGhJson.mockResolvedValue({
+        statusCheckRollup: [
+          { name: "lint", conclusion: "FAILURE" },
+          { name: "test", conclusion: null, status: "IN_PROGRESS" },
+        ],
+      });
+
+      await prCommand(["checks", "5"], ctx);
+
+      expect(process.exitCode).toBe(1);
+    });
+
+    it("counts only the latest run of a re-run check, like gh", async () => {
+      mockedGhJson.mockResolvedValue({
+        statusCheckRollup: [
+          {
+            name: "test",
+            workflowName: "CI",
+            conclusion: "FAILURE",
+            startedAt: "2026-01-01T10:00:00Z",
+          },
+          {
+            name: "test",
+            workflowName: "CI",
+            conclusion: "SUCCESS",
+            startedAt: "2026-01-01T11:00:00Z",
+          },
+        ],
+      });
+
+      const result = await prCommand(["checks", "5"], ctx);
+
+      expect(result).toContain("1 passed, 0 failed");
+      expect(result).toContain("1 total");
+      expect(result).not.toContain("test,fail");
+      expect(process.exitCode).toBeUndefined();
+    });
+
+    it("treats a queued re-run with no startedAt as the newest run", async () => {
+      mockedGhJson.mockResolvedValue({
+        statusCheckRollup: [
+          {
+            name: "test",
+            workflowName: "CI",
+            conclusion: null,
+            status: "QUEUED",
+            startedAt: "0001-01-01T00:00:00Z",
+          },
+          {
+            name: "test",
+            workflowName: "CI",
+            conclusion: "FAILURE",
+            startedAt: "2026-01-01T10:00:00Z",
+          },
+          { name: "lint", workflowName: "CI", conclusion: null },
+          {
+            name: "lint",
+            workflowName: "CI",
+            conclusion: "FAILURE",
+            startedAt: "2026-01-01T10:00:00Z",
+          },
+        ],
+      });
+
+      await prCommand(["checks", "5"], ctx);
+
+      expect(process.exitCode).toBe(8);
+    });
+
+    it("keeps same-named checks from different workflows", async () => {
+      mockedGhJson.mockResolvedValue({
+        statusCheckRollup: [
+          {
+            name: "build",
+            workflowName: "CI",
+            conclusion: "SUCCESS",
+            startedAt: "2026-01-01T10:00:00Z",
+          },
+          {
+            name: "build",
+            workflowName: "Release",
+            conclusion: "FAILURE",
+            startedAt: "2026-01-01T09:00:00Z",
+          },
+        ],
+      });
+
+      const result = await prCommand(["checks", "5"], ctx);
+
+      expect(result).toContain("1 passed, 1 failed");
+      expect(process.exitCode).toBe(1);
+    });
+
+    it.each([
+      ["test/unit", "CI", "test", "unit/CI"],
+      ["test", "unit/CI", "test/unit", "CI"],
+    ])(
+      "keeps %s in %s apart from %s in %s when the older one failed",
+      async (failName, failWorkflow, passName, passWorkflow) => {
+        mockedGhJson.mockResolvedValue({
+          statusCheckRollup: [
+            {
+              name: failName,
+              workflowName: failWorkflow,
+              conclusion: "FAILURE",
+              startedAt: "2026-01-01T09:00:00Z",
+            },
+            {
+              name: passName,
+              workflowName: passWorkflow,
+              conclusion: "SUCCESS",
+              startedAt: "2026-01-01T10:00:00Z",
+            },
+          ],
+        });
+
+        const result = await prCommand(["checks", "5"], ctx);
+
+        expect(result).toContain("1 passed, 1 failed");
+        expect(result).toContain("2 total");
+        expect(process.exitCode).toBe(1);
+      },
+    );
+
+    it("exits 8 and suggests --watch when a check is pending", async () => {
+      mockedGhJson.mockResolvedValue({
+        statusCheckRollup: [
+          { name: "build", conclusion: "SUCCESS" },
+          { name: "test", conclusion: null, status: "QUEUED" },
+        ],
+      });
+
+      const result = await prCommand(["checks", "5"], ctx);
+
+      expect(process.exitCode).toBe(8);
+      expect(result).toContain("pr checks 5 --watch");
+    });
+
+    it("--watch polls until no check is pending", async () => {
+      vi.useFakeTimers();
+      mockedGhJson
+        .mockResolvedValueOnce({
+          statusCheckRollup: [
+            { name: "build", conclusion: null, status: "IN_PROGRESS" },
+          ],
+        })
+        .mockResolvedValueOnce({
+          statusCheckRollup: [
+            { name: "build", conclusion: null, status: "IN_PROGRESS" },
+          ],
+        })
+        .mockResolvedValueOnce({
+          statusCheckRollup: [{ name: "build", conclusion: "SUCCESS" }],
+        });
+
+      const pending = prCommand(["checks", "5", "--watch"], ctx);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(mockedGhJson).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(10_000);
+      const result = await pending;
+
+      expect(mockedGhJson).toHaveBeenCalledTimes(3);
+      expect(result).toContain("1 passed, 0 failed, 1 total");
+      expect(result).not.toContain("pending");
+      expect(process.exitCode).toBeUndefined();
+    });
+
+    it("--watch exits 1 when a check finished failing", async () => {
+      vi.useFakeTimers();
+      mockedGhJson
+        .mockResolvedValueOnce({
+          statusCheckRollup: [
+            { name: "build", conclusion: null, status: "IN_PROGRESS" },
+          ],
+        })
+        .mockResolvedValueOnce({
+          statusCheckRollup: [{ name: "build", conclusion: "FAILURE" }],
+        });
+
+      const pending = prCommand(["checks", "5", "--watch"], ctx);
+      await vi.advanceTimersByTimeAsync(10_000);
+      const result = await pending;
+
+      expect(result).toContain("build,fail");
+      expect(process.exitCode).toBe(1);
+    });
+
+    it("--watch --interval sets the poll interval in seconds", async () => {
+      vi.useFakeTimers();
+      mockedGhJson
+        .mockResolvedValueOnce({
+          statusCheckRollup: [
+            { name: "build", conclusion: null, status: "IN_PROGRESS" },
+          ],
+        })
+        .mockResolvedValueOnce({
+          statusCheckRollup: [{ name: "build", conclusion: "SUCCESS" }],
+        });
+
+      // --interval comes before the PR number: its value must not be read as
+      // the PR.
+      const pending = prCommand(
+        ["checks", "--interval", "3", "5", "--watch"],
+        ctx,
+      );
+      await vi.advanceTimersByTimeAsync(2_999);
+      expect(mockedGhJson).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await pending;
+
+      expect(mockedGhJson).toHaveBeenCalledTimes(2);
+      expect(mockedGhJson.mock.calls[0]?.[0]).toEqual([
+        "pr",
+        "view",
+        "5",
+        "--json",
+        "statusCheckRollup",
+      ]);
+    });
+
+    it("--watch --fail-fast stops at the first failure while others are pending", async () => {
+      mockedGhJson.mockResolvedValue({
+        statusCheckRollup: [
+          { name: "lint", conclusion: "FAILURE" },
+          { name: "test", conclusion: null, status: "IN_PROGRESS" },
+        ],
+      });
+
+      const result = await prCommand(
+        ["checks", "5", "--watch", "--fail-fast"],
+        ctx,
+      );
+
+      expect(mockedGhJson).toHaveBeenCalledTimes(1);
+      expect(result).toContain("1 pending");
+      expect(process.exitCode).toBe(1);
+    });
+
+    it("--watch ends on an empty rollup instead of waiting, like gh", async () => {
+      mockedGhJson.mockResolvedValue({ statusCheckRollup: [] });
+
+      const result = await prCommand(["checks", "5", "--watch"], ctx);
+
+      expect(mockedGhJson).toHaveBeenCalledTimes(1);
+      expect(result).toContain("no check results reported");
+      expect(process.exitCode).toBe(1);
+    });
+
+    it("rejects --fail-fast and --interval without --watch", async () => {
+      await expect(
+        prCommand(["checks", "5", "--fail-fast"], ctx),
+      ).rejects.toThrow(/--fail-fast requires --watch/);
+      await expect(
+        prCommand(["checks", "5", "--interval", "5"], ctx),
+      ).rejects.toThrow(/--interval requires --watch/);
+      expect(mockedGhJson).not.toHaveBeenCalled();
+    });
+
+    it("rejects a missing or invalid --interval value", async () => {
+      await expect(
+        prCommand(["checks", "5", "--watch", "--interval"], ctx),
+      ).rejects.toThrow(/--interval requires a value/);
+      await expect(
+        prCommand(["checks", "5", "--interval", "--watch"], ctx),
+      ).rejects.toThrow(/--interval requires a value/);
+      await expect(
+        prCommand(["checks", "5", "--watch", "--interval=0"], ctx),
+      ).rejects.toThrow(/whole number of seconds/);
+      await expect(
+        prCommand(["checks", "5", "--watch", "--interval=1.5"], ctx),
+      ).rejects.toThrow(/whole number of seconds/);
+      expect(mockedGhJson).not.toHaveBeenCalled();
+    });
+
+    it("caps --interval at the largest delay Node's setTimeout honors", async () => {
+      await expect(
+        prCommand(["checks", "5", "--watch", "--interval", "2147484"], ctx),
+      ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+      expect(mockedGhJson).not.toHaveBeenCalled();
+
+      vi.useFakeTimers();
+      mockedGhJson
+        .mockResolvedValueOnce({
+          statusCheckRollup: [
+            { name: "build", conclusion: null, status: "IN_PROGRESS" },
+          ],
+        })
+        .mockResolvedValueOnce({
+          statusCheckRollup: [{ name: "build", conclusion: "SUCCESS" }],
+        });
+
+      const pending = prCommand(
+        ["checks", "5", "--watch", "--interval", "2147483"],
+        ctx,
+      );
+      await vi.advanceTimersByTimeAsync(2_147_482_999);
+      expect(mockedGhJson).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await pending;
+
+      expect(mockedGhJson).toHaveBeenCalledTimes(2);
+    });
+
+    it("returns check summary with checks", async () => {
+      mockedGhJson.mockResolvedValue({
+        statusCheckRollup: [
+          { name: "build", conclusion: "SUCCESS" },
+          { name: "lint", conclusion: "FAILURE" },
+          { name: "test", conclusion: "SKIPPED" },
+        ],
+      });
+
+      const result = await prCommand(["checks", "5"], ctx);
+
+      expect(result).toContain("1 passed");
+      expect(result).toContain("1 failed");
+      expect(result).toContain("1 skipped");
+      expect(result).toContain("3 total");
+    });
+
+    it("rejects a --failed value form instead of silently ignoring it", async () => {
+      await expect(
+        prCommand(["checks", "42", "--failed=true"], ctx),
+      ).rejects.toThrow(/--failed does not take a value/);
+    });
+
+    it("shows only failing checks with --failed but keeps the full summary", async () => {
+      mockedGhJson.mockResolvedValue({
+        statusCheckRollup: [
+          { name: "build", conclusion: "SUCCESS" },
+          { name: "lint", conclusion: "FAILURE" },
+          { name: "test", conclusion: "SKIPPED" },
+        ],
+      });
+
+      const result = await prCommand(["checks", "5", "--failed"], ctx);
+
+      expect(result).toContain("1 passed, 1 failed");
+      expect(result).toContain("3 total");
+      expect(result).toContain("lint,fail");
+      expect(result).not.toContain("build,pass");
+      expect(result).not.toContain("test,skip");
+    });
+
+    it("keeps an unfinished check run pending", async () => {
+      mockedGhJson.mockResolvedValue({
+        statusCheckRollup: [
+          { name: "build", conclusion: null, status: "IN_PROGRESS" },
+        ],
+      });
+
+      const result = await prCommand(["checks", "5"], ctx);
+
+      expect(result).toContain("build,pending");
+      expect(result).toContain("0 passed, 0 failed, 1 pending");
+    });
+
+    it("classifies a successful legacy status context as passing", async () => {
+      mockedGhJson.mockResolvedValue({
+        statusCheckRollup: [{ context: "Vercel", state: "SUCCESS" }],
+      });
+
+      const result = await prCommand(["checks", "5"], ctx);
+
+      expect(result).toContain("Vercel,pass");
+      expect(result).toContain("1 passed, 0 failed");
+      expect(result).not.toContain("pending");
+    });
+
+    it("classifies a failing legacy status context as failing", async () => {
+      mockedGhJson.mockResolvedValue({
+        statusCheckRollup: [{ context: "Vercel", state: "FAILURE" }],
+      });
+
+      const result = await prCommand(["checks", "5"], ctx);
+
+      expect(result).toContain("Vercel,fail");
+      expect(result).toContain("0 passed, 1 failed");
+      expect(result).not.toContain("pending");
+    });
+
+    it("classifies an errored legacy status context as failing", async () => {
+      mockedGhJson.mockResolvedValue({
+        statusCheckRollup: [{ context: "Vercel", state: "ERROR" }],
+      });
+
+      const result = await prCommand(["checks", "5"], ctx);
+
+      expect(result).toContain("Vercel,fail");
+      expect(result).toContain("0 passed, 1 failed");
+    });
+
+    it("keeps a pending legacy status context pending", async () => {
+      mockedGhJson.mockResolvedValue({
+        statusCheckRollup: [{ context: "Vercel", state: "PENDING" }],
+      });
+
+      const result = await prCommand(["checks", "5"], ctx);
+
+      expect(result).toContain("Vercel,pending");
+      expect(result).toContain("0 passed, 0 failed, 1 pending");
+    });
+
+    it("classifies a check run that failed to start as failing", async () => {
+      mockedGhJson.mockResolvedValue({
+        statusCheckRollup: [{ name: "build", conclusion: "STARTUP_FAILURE" }],
+      });
+
+      const result = await prCommand(["checks", "5"], ctx);
+
+      expect(result).toContain("build,fail");
+      expect(result).toContain("0 passed, 1 failed");
+      expect(result).not.toContain("pending");
+    });
+
+    it("keeps a stale check run pending", async () => {
+      mockedGhJson.mockResolvedValue({
+        statusCheckRollup: [{ name: "build", conclusion: "STALE" }],
+      });
+
+      const result = await prCommand(["checks", "5"], ctx);
+
+      expect(result).toContain("build,pending");
+      expect(result).toContain("0 passed, 0 failed, 1 pending");
+    });
+
+    it("classifies a cancelled check run as cancelled, not failing", async () => {
+      mockedGhJson.mockResolvedValue({
+        statusCheckRollup: [{ name: "build", conclusion: "CANCELLED" }],
+      });
+
+      const result = await prCommand(["checks", "5"], ctx);
+
+      expect(result).toContain("build,cancel");
+      expect(result).toContain("0 passed, 0 failed, 1 cancelled");
+      expect(result).not.toContain("pending");
+    });
+
+    it("keeps a skipped check run skipped", async () => {
+      mockedGhJson.mockResolvedValue({
+        statusCheckRollup: [{ name: "build", conclusion: "SKIPPED" }],
+      });
+
+      const result = await prCommand(["checks", "5"], ctx);
+
+      expect(result).toContain("build,skip");
+      expect(result).toContain("0 passed, 0 failed");
+      expect(result).toContain("1 skipped");
+    });
+
+    it("counts a mix of check runs and legacy status contexts", async () => {
+      mockedGhJson.mockResolvedValue({
+        statusCheckRollup: [
+          { name: "build", conclusion: "SUCCESS" },
+          { name: "test", conclusion: null, status: "IN_PROGRESS" },
+          { context: "Vercel", state: "SUCCESS" },
+          { context: "ci/circleci", state: "FAILURE" },
+        ],
+      });
+
+      const result = await prCommand(["checks", "5"], ctx);
+
+      expect(result).toContain("2 passed, 1 failed, 1 pending, 4 total");
+    });
+  });
+
+  describe("diff", () => {
+    it("accepts --patch as a gh-compatible alias", async () => {
+      mockedGhExec.mockResolvedValue("diff --git a/file.ts b/file.ts\n");
+
+      const result = await prCommand(["diff", "7", "--patch"], ctx);
+
+      expect(mockedGhExec).toHaveBeenCalledWith(
+        ["pr", "diff", "7"],
+        expect.anything(),
+      );
+      expect(result).toContain("diff --git");
+    });
+
+    it("wraps diff output in TOON envelope", async () => {
+      mockedGhExec.mockResolvedValue(
+        "diff --git a/file.ts b/file.ts\n+added line\n",
+      );
+
+      const result = await prCommand(["diff", "7"], ctx);
+
+      expect(result).toContain("pr_diff:");
+      expect(result).toContain("number: 7");
+      expect(result).toContain("diff --git");
+      expect(result).not.toContain("truncated:");
+      expect(result).not.toContain("--full");
+    });
+
+    it("truncates large diffs with metadata and --full escape hatch", async () => {
+      const largeDiff = "x".repeat(25000);
+      mockedGhExec.mockResolvedValue(largeDiff);
+
+      const result = await prCommand(["diff", "7"], ctx);
+
+      expect(result).toContain("truncated: true");
+      expect(result).toContain("original_length: 25000");
+      expect(result).toContain("pr diff 7 --full");
+      expect(result).toContain("to see the complete diff");
+      // AXI form: flags after the command, never `gh-axi -R ... pr diff`.
+      expect(result).toContain("`gh-axi pr diff 7 --full -R octo/repo`");
+      expect(result).not.toContain("gh-axi -R octo/repo pr diff");
+    });
+
+    it("skips truncation with --full flag", async () => {
+      const largeDiff = "x".repeat(25000);
+      mockedGhExec.mockResolvedValue(largeDiff);
+
+      const result = await prCommand(["diff", "7", "--full"], ctx);
+
+      expect(result).not.toContain("truncated:");
+      expect(result).not.toContain("original_length");
+    });
+  });
+
+  describe("--attach", () => {
+    const assetUrl =
+      "https://github.com/user-attachments/assets/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+
+    it("documents --attach and the gh >= 2.99.0 requirement in help", async () => {
+      const result = await prCommand(["--help"]);
+      expect(result).toContain("--attach <path[#alt]>");
+      expect(result).toContain("gh >= 2.99.0");
+      expect(result).toContain("(repeatable");
+    });
+
+    it("does not pass --attach when the flag is absent", async () => {
+      mockedGhExec.mockResolvedValue("https://github.com/octo/repo/pull/12\n");
+      await prCommand(["create", "--title", "T"], ctx);
+      const argv = mockedGhExec.mock.calls[0][0] as string[];
+      expect(argv).not.toContain("--attach");
+      expect(mockedGhExecWithAttachmentState).not.toHaveBeenCalled();
+      expect(mockedEnsureAttachmentSupport).not.toHaveBeenCalled();
+    });
+
+    it("does not consume --attach as a missing title value", async () => {
+      await expect(
+        prCommand(["create", "--title", "--attach", "./a.png"], ctx),
+      ).rejects.toThrow("--title is required");
+
+      expect(mockedEnsureAttachmentSupport).toHaveBeenCalledOnce();
+      expect(mockedGhExecWithAttachmentState).not.toHaveBeenCalled();
+    });
+
+    it("forwards repeated --attach on create and names uploaded asset URLs", async () => {
+      await withPng(async (file) => {
+        mockedGhExecWithAttachmentState.mockResolvedValue(
+          "https://github.com/octo/repo/pull/12\n",
+        );
+        mockedGhJson.mockResolvedValue({
+          body: `![repro](${assetUrl})`,
+        });
+
+        const spec = `${file}#Before`;
+        const result = await prCommand(
+          ["create", "--title", "T", "--attach", spec, "--attach", file],
+          ctx,
+        );
+
+        expect(mockedGhExecWithAttachmentState).toHaveBeenCalledWith(
+          [
+            "pr",
+            "create",
+            "--title",
+            "T",
+            "--body",
+            "",
+            "--attach",
+            spec,
+            "--attach",
+            file,
+          ],
+          ctx,
+        );
+        expect(result).toContain("attachments");
+        expect(result).toContain(file);
+        expect(result).toContain(assetUrl);
+      });
+    });
+
+    it("preserves a successful create when attachment readback fails", async () => {
+      await withPng(async (file) => {
+        const url = "https://github.com/octo/repo/pull/12";
+        mockedGhExecWithAttachmentState.mockResolvedValue(`${url}\n`);
+        mockedGhJson.mockRejectedValue(
+          new AxiError("Could not fetch the created pull request", "UNKNOWN"),
+        );
+
+        await expect(
+          prCommand(["create", "--title", "T", "--attach", file], ctx),
+        ).rejects.toMatchObject({
+          message: `Mutation succeeded at ${url}, but follow-up operation failed: Could not fetch the created pull request`,
+        });
+      });
+    });
+
+    it("reports only newly uploaded asset URLs on edit", async () => {
+      await withPng(async (file) => {
+        const oldUrl =
+          "https://github.com/user-attachments/assets/00000000-0000-0000-0000-000000000000";
+        mockedGhExecWithAttachmentState.mockResolvedValue("");
+        mockedGhJson
+          .mockResolvedValueOnce({ body: oldUrl })
+          .mockResolvedValueOnce({ body: `${oldUrl}\n${assetUrl}` });
+
+        const result = await prCommand(["edit", "12", "--attach", file], ctx);
+
+        expect(mockedGhExecWithAttachmentState).toHaveBeenCalledWith(
+          ["pr", "edit", "12", "--attach", file],
+          ctx,
+        );
+        expect(result).toContain(file);
+        expect(result).toContain(assetUrl);
+        expect(result).not.toContain(oldUrl);
+      });
+    });
+
+    it("preserves a successful edit when attachment readback fails", async () => {
+      await withPng(async (file) => {
+        mockedGhExecWithAttachmentState.mockResolvedValue("");
+        mockedGhJson
+          .mockResolvedValueOnce({ body: "before" })
+          .mockRejectedValueOnce(
+            new AxiError("Could not fetch the edited pull request", "UNKNOWN"),
+          );
+
+        await expect(
+          prCommand(["edit", "12", "--attach", file], ctx),
+        ).rejects.toMatchObject({
+          message:
+            "Mutation succeeded at pull request #12, but follow-up operation failed: Could not fetch the edited pull request",
+        });
+      });
+    });
+
+    it("fetches the created attached comment by its emitted URL", async () => {
+      await withPng(async (file) => {
+        mockedGhExecWithAttachmentState.mockResolvedValue(
+          "https://github.com/octo/repo/pull/12#issuecomment-67890\n",
+        );
+        mockedGhJson.mockResolvedValue({
+          user: { login: "alice" },
+          body: `![repro](${assetUrl})`,
+          created_at: "2026-01-01T00:00:00Z",
+        });
+
+        const result = await prCommand(
+          ["comment", "12", "--attach", file],
+          ctx,
+        );
+
+        expect(mockedGhExecWithAttachmentState).toHaveBeenCalledWith(
+          ["pr", "comment", "12", "--attach", file],
+          ctx,
+        );
+        expect(mockedGhJson).toHaveBeenCalledWith([
+          "api",
+          "repos/octo/repo/issues/comments/67890",
+        ]);
+        expect(result).toContain(file);
+        expect(result).toContain(assetUrl);
+      });
+    });
+
+    it("preserves a successful comment when attachment readback fails", async () => {
+      await withPng(async (file) => {
+        const url = "https://github.com/octo/repo/pull/12#issuecomment-67890";
+        mockedGhExecWithAttachmentState.mockResolvedValue(`${url}\n`);
+        mockedGhJson.mockRejectedValue(
+          new AxiError("Could not fetch the created comment", "UNKNOWN"),
+        );
+
+        await expect(
+          prCommand(["comment", "12", "--attach", file], ctx),
+        ).rejects.toMatchObject({
+          message: `Mutation succeeded at ${url}, but follow-up operation failed: Could not fetch the created comment`,
+        });
+      });
+    });
+
+    it("reports partial create asset URLs", async () => {
+      await withPng(async (file) => {
+        const url = "https://github.com/octo/repo/pull/12";
+        mockedGhExecWithAttachmentState.mockRejectedValue(
+          partialAttachmentError(url),
+        );
+        mockedGhJson.mockResolvedValue({ body: assetUrl });
+
+        await expect(
+          prCommand(["create", "--title", "T", "--attach", file], ctx),
+        ).rejects.toMatchObject({ assetUrls: [assetUrl] });
+      });
+    });
+
+    it("reports partial edit asset URLs", async () => {
+      await withPng(async (file) => {
+        mockedGhExecWithAttachmentState.mockRejectedValue(
+          partialAttachmentError("https://github.com/octo/repo/pull/12"),
+        );
+        mockedGhJson
+          .mockResolvedValueOnce({ body: "before" })
+          .mockResolvedValueOnce({ body: assetUrl });
+
+        await expect(
+          prCommand(["edit", "12", "--attach", file], ctx),
+        ).rejects.toMatchObject({ assetUrls: [assetUrl] });
+      });
+    });
+
+    it("reports partial comment asset URLs", async () => {
+      await withPng(async (file) => {
+        const url = "https://github.com/octo/repo/pull/12#issuecomment-67890";
+        mockedGhExecWithAttachmentState.mockRejectedValue(
+          partialAttachmentError(url),
+        );
+        mockedGhJson.mockResolvedValue({
+          user: { login: "alice" },
+          body: assetUrl,
+          created_at: "2026-01-01T00:00:00Z",
+        });
+
+        await expect(
+          prCommand(["comment", "12", "--attach", file], ctx),
+        ).rejects.toMatchObject({ assetUrls: [assetUrl] });
+      });
+    });
+
+    it("still requires a body on comment when --attach is absent", async () => {
+      await expect(prCommand(["comment", "12"], ctx)).rejects.toThrow(
+        /--body or --body-file is required/,
+      );
+      expect(mockedGhExec).not.toHaveBeenCalled();
+    });
+
+    it("surfaces gh attachment validation errors", async () => {
+      mockedGhExecWithAttachmentState.mockRejectedValue(
+        new AxiError(
+          "--attach ./note.txt is not a supported file type",
+          "VALIDATION_ERROR",
+        ),
+      );
+
+      await expect(
+        prCommand(["create", "--title", "T", "--attach", "./note.txt"], ctx),
+      ).rejects.toThrow("--attach ./note.txt is not a supported file type");
+      expect(mockedGhExecWithAttachmentState).toHaveBeenCalledWith(
+        [
+          "pr",
+          "create",
+          "--title",
+          "T",
+          "--body",
+          "",
+          "--attach",
+          "./note.txt",
+        ],
+        ctx,
+      );
+    });
+
+    it("does not add --attach to pr review", async () => {
+      await withPng(async (file) => {
+        await expect(
+          prCommand(
+            ["review", "12", "--comment", "--body", "ok", "--attach", file],
+            ctx,
+          ),
+        ).rejects.toThrow(/unknown flag for gh-axi pr review: --attach/);
+        expect(mockedGhExec).not.toHaveBeenCalled();
+      });
+    });
+  });
+});

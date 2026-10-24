@@ -1,0 +1,421 @@
+import { describe, it, expect } from "vitest";
+import {
+  AxiError,
+  mapGhError,
+  ghNotInstalledError,
+  exitCodeForError,
+} from "../src/errors.js";
+
+describe("AxiError", () => {
+  it("has correct code and message", () => {
+    const err = new AxiError("not found", "NOT_FOUND");
+    expect(err.message).toBe("not found");
+    expect(err.code).toBe("NOT_FOUND");
+    expect(err.name).toBe("AxiError");
+    expect(err).toBeInstanceOf(Error);
+  });
+
+  it("has default empty suggestions", () => {
+    const err = new AxiError("msg", "UNKNOWN");
+    expect(err.suggestions).toEqual([]);
+  });
+
+  it("stores custom suggestions", () => {
+    const err = new AxiError("msg", "NOT_FOUND", ["Try this", "Try that"]);
+    expect(err.suggestions).toEqual(["Try this", "Try that"]);
+  });
+});
+
+describe("mapGhError", () => {
+  it("maps disabled discussions to a validation error naming the repo", () => {
+    const err = mapGhError(
+      "the 'octo/repo' repository has discussions disabled",
+      1,
+    );
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toBe("Discussions are disabled for octo/repo");
+  });
+
+  it("maps an unknown discussion category to a validation error", () => {
+    const err = mapGhError(
+      'unknown category: "nope"; must be one of: general, ideas',
+      1,
+    );
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toContain("must be one of: general, ideas");
+  });
+
+  it("explains a gh without the discussion command", () => {
+    const err = mapGhError('unknown command "discussion" for "gh"', 1);
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toContain("gh discussion");
+  });
+
+  it("explains a search qualifier that swallowed the rest of the query", () => {
+    const err = mapGhError(
+      'Invalid search query "( review-requested:\\"@me created:>=2026-10-07\\" ) type:pr".\n' +
+        "The listed users cannot be searched either because the users do not exist or you do not have permission to view the users.",
+      1,
+    );
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toContain("`review-requested:` qualifier");
+    expect(err.suggestions[0]).toContain(
+      "'review-requested:@me' 'created:>=2026-10-07'",
+    );
+  });
+
+  it("quotes apostrophes in the split-query suggestion", () => {
+    const err = mapGhError(
+      'Invalid search query "( author:\\"missing-user O\'Brien\\" )".',
+      1,
+    );
+    expect(err.suggestions[0]).toContain("'author:missing-user' 'O'\\''Brien'");
+  });
+
+  it("keeps GitHub's error for a single quoted qualifier value", () => {
+    const err = mapGhError(
+      'Invalid search query "( author:\\"missing-user\\" ) type:pr".\n' +
+        "The listed users cannot be searched.",
+      1,
+    );
+    expect(err.message).not.toContain("swallowed");
+    expect(err.message).toContain("Invalid search query");
+  });
+
+  it("matches repo not found pattern", () => {
+    const err = mapGhError(
+      "Could not resolve to a Repository with the name 'cli/cli'",
+      1,
+    );
+    expect(err.code).toBe("REPO_NOT_FOUND");
+    expect(err.message).toContain("cli/cli");
+    expect(err.suggestions.length).toBeGreaterThan(0);
+  });
+
+  it("matches issue not found pattern (GraphQL)", () => {
+    const err = mapGhError(
+      "Could not resolve to an Issue with the number of 999",
+      1,
+    );
+    expect(err.code).toBe("NOT_FOUND");
+    expect(err.message).toContain("999");
+  });
+
+  it("matches issue not found pattern (REST)", () => {
+    const err = mapGhError("issue 42 not found", 1);
+    expect(err.code).toBe("NOT_FOUND");
+    expect(err.message).toContain("42");
+  });
+
+  it("matches pull request not found pattern", () => {
+    const err = mapGhError("pull request 10 not found", 1);
+    expect(err.code).toBe("NOT_FOUND");
+    expect(err.message).toContain("10");
+  });
+
+  it("matches release not found pattern", () => {
+    const err = mapGhError('release with tag "v1.0" not found', 1);
+    expect(err.code).toBe("NOT_FOUND");
+    expect(err.message).toContain("v1.0");
+    expect(err.suggestions.some((s) => s.includes("release list"))).toBe(true);
+  });
+
+  it("matches run not found pattern", () => {
+    const err = mapGhError("run 12345 not found", 1);
+    expect(err.code).toBe("NOT_FOUND");
+    expect(err.message).toContain("12345");
+    expect(err.suggestions.some((s) => s.includes("run list"))).toBe(true);
+  });
+
+  it("matches auth required pattern", () => {
+    const err = mapGhError("To get started, please run: gh auth login", 1);
+    expect(err.code).toBe("AUTH_REQUIRED");
+  });
+
+  it("classifies gh's repo-resolution failure as a validation error, not auth", () => {
+    const err = mapGhError(
+      "none of the git remotes configured for this repository point to a known GitHub host. To tell gh about a new GitHub host, please use `gh auth login`",
+      1,
+    );
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.suggestions.join(" ")).toContain("-R <owner>/<name>");
+  });
+
+  it("matches missing OAuth scope pattern (e.g. gh project without project scope)", () => {
+    const err = mapGhError(
+      "error: your authentication token is missing required scopes [read:project]\n" +
+        "To request it, run:  gh auth refresh -s read:project",
+      1,
+    );
+    expect(err.code).toBe("FORBIDDEN");
+    expect(err.message).toBe(
+      "GitHub token is missing required scope(s): read:project",
+    );
+    expect(
+      err.suggestions.some((s) =>
+        s.includes("gh auth refresh -s read:project"),
+      ),
+    ).toBe(true);
+  });
+
+  it("matches forbidden pattern", () => {
+    const err = mapGhError("HTTP 403: Forbidden", 1);
+    expect(err.code).toBe("FORBIDDEN");
+  });
+
+  it("matches GraphQL primary rate limit pattern", () => {
+    const err = mapGhError(
+      "GraphQL: API rate limit already exceeded for user ID 189865151.",
+      1,
+    );
+    expect(err.code).toBe("RATE_LIMITED");
+    expect(err.message).toContain("rate limit");
+    expect(err.suggestions.length).toBeGreaterThan(0);
+  });
+
+  it("matches REST primary rate limit pattern (HTTP 403 form)", () => {
+    const err = mapGhError(
+      "HTTP 403: API rate limit exceeded for user ID 12345.",
+      1,
+    );
+    expect(err.code).toBe("RATE_LIMITED");
+  });
+
+  it("matches secondary rate limit pattern", () => {
+    const err = mapGhError(
+      "HTTP 403: You have exceeded a secondary rate limit. Please wait a few minutes before you try again.",
+      1,
+    );
+    expect(err.code).toBe("RATE_LIMITED");
+    expect(err.message).toContain("secondary");
+  });
+
+  it("matches validation error pattern with message extraction", () => {
+    const stderr = 'HTTP 422: {"message": "Validation Failed", "errors": []}';
+    const err = mapGhError(stderr, 1);
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toBe("Validation Failed");
+  });
+
+  it("surfaces gh api's multi-line 422 message instead of the fallback", () => {
+    const stderr =
+      'gh: Invalid request.\n\n1 is not a member of ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"].\nFor \'properties/content\', 1 is not a string. (HTTP 422)\n';
+    const err = mapGhError(stderr, 1);
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toBe(
+      'Invalid request. 1 is not a member of ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"]. For \'properties/content\', 1 is not a string.',
+    );
+  });
+
+  it("surfaces gh api's single-line 422 message", () => {
+    const err = mapGhError("gh: Validation Failed (HTTP 422)\n", 1);
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toBe("Validation Failed");
+  });
+
+  it("surfaces the go-gh HTTPError 422 message without the request URL", () => {
+    const err = mapGhError(
+      "could not create workflow dispatch event: HTTP 422: Workflow does not have 'workflow_dispatch' trigger (https://api.github.com/repos/octo/repo/actions/workflows/1/dispatches)\n",
+      1,
+    );
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toBe(
+      "Workflow does not have 'workflow_dispatch' trigger",
+    );
+  });
+
+  it("keeps the go-gh HTTPError 422 detail lines", () => {
+    const err = mapGhError(
+      "HTTP 422: Validation Failed (https://api.github.com/repos/octo/repo/labels)\nLabel name already exists\n",
+      1,
+    );
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toBe("Validation Failed Label name already exists");
+  });
+
+  it("matches validation error pattern without extractable message", () => {
+    const err = mapGhError("HTTP 422", 1);
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toBe("Validation error");
+  });
+
+  it("returns NOT_FOUND for generic not found messages", () => {
+    const err = mapGhError("something not found", 1);
+    expect(err.code).toBe("NOT_FOUND");
+  });
+
+  it('returns NOT_FOUND for "Not Found" (capitalized)', () => {
+    const err = mapGhError("Not Found", 1);
+    expect(err.code).toBe("NOT_FOUND");
+  });
+
+  it("returns NOT_FOUND for mixed-case not found messages", () => {
+    const err = mapGhError("resource NOT found", 1);
+    expect(err.code).toBe("NOT_FOUND");
+  });
+
+  it("maps sub-issue already-linked errors to an actionable message", () => {
+    const err = mapGhError(
+      "GraphQL: Sub-issue is already a sub-issue of issue with number 5 (addSubIssue)",
+      1,
+    );
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toMatch(/already a sub-issue of #?5/);
+  });
+
+  it("maps sub-issue cycle errors", () => {
+    const err = mapGhError(
+      "GraphQL: Sub-issue would create a cycle (addSubIssue)",
+      1,
+    );
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toMatch(/cycle/i);
+  });
+
+  it("maps sub-issue self-parent errors", () => {
+    const err = mapGhError(
+      "GraphQL: An issue cannot be a sub-issue of itself (addSubIssue)",
+      1,
+    );
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toMatch(/itself/i);
+  });
+
+  it("returns UNKNOWN for unrecognized errors", () => {
+    const err = mapGhError("some random error", 1);
+    expect(err.code).toBe("UNKNOWN");
+    expect(err.message).toBe("some random error");
+  });
+
+  it("returns UNKNOWN with exit code message for empty stderr", () => {
+    const err = mapGhError("", 2);
+    expect(err.code).toBe("UNKNOWN");
+    expect(err.message).toContain("exited with code 2");
+  });
+
+  it("uses first line of multi-line stderr for UNKNOWN errors", () => {
+    const err = mapGhError("first line\nsecond line\nthird line", 1);
+    expect(err.code).toBe("UNKNOWN");
+    expect(err.message).toBe("first line");
+  });
+
+  it("maps unknown flag --attach to a gh >= 2.99.0 upgrade error", () => {
+    const err = mapGhError("unknown flag: --attach", 1);
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toContain("gh >= 2.99.0");
+    expect(err.message).toContain("GH_BIN");
+    expect(err.suggestions.some((s) => s.includes("2.99.0"))).toBe(true);
+  });
+
+  it("maps old gh's rejection of --duplicate-of to a gh >= 2.88.0 upgrade error", () => {
+    const err = mapGhError("unknown flag: --duplicate-of", 1);
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toContain("gh >= 2.88.0");
+    expect(err.message).toContain("GH_BIN");
+    expect(err.suggestions.some((s) => s.includes("2.88.0"))).toBe(true);
+  });
+
+  it("maps old gh's rejection of --reason duplicate to a gh >= 2.88.0 upgrade error", () => {
+    const err = mapGhError(
+      'invalid argument "duplicate" for "-r, --reason" flag: valid values are {completed|not planned}',
+      1,
+    );
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toContain("gh >= 2.88.0");
+  });
+
+  it("maps gh attach type and size stderr to VALIDATION_ERROR", () => {
+    const typeErr = mapGhError(
+      "/tmp/my image.txt is not a supported file type (supported: png, jpg, jpeg, gif, webp, svg, mp4, mov, webm)",
+      1,
+    );
+    expect(typeErr.code).toBe("VALIDATION_ERROR");
+    expect(typeErr.message).toContain("--attach /tmp/my image.txt");
+
+    const sizeErr = mapGhError(
+      "/tmp/my big.png: images must be at most 10.0 MB",
+      1,
+    );
+    expect(sizeErr.code).toBe("VALIDATION_ERROR");
+    expect(sizeErr.message).toContain("--attach /tmp/my big.png");
+
+    const videoSizeErr = mapGhError(
+      "/tmp/my clip.mp4: videos must be at most 100.0 MB",
+      1,
+    );
+    expect(videoSizeErr.code).toBe("VALIDATION_ERROR");
+    expect(videoSizeErr.message).toContain("--attach /tmp/my clip.mp4");
+
+    const videoErr = mapGhError("cannot set alt text on video", 1);
+    expect(videoErr.code).toBe("VALIDATION_ERROR");
+    expect(videoErr.message).toContain("cannot set alt text on video");
+  });
+
+  it("retains the write-access reason for attachment upload failures", () => {
+    const err = mapGhError(
+      "could not upload /tmp/my image.png\nattaching files requires write access to the repository",
+      1,
+    );
+
+    expect(err.code).toBe("FORBIDDEN");
+    expect(err.message).toBe(
+      "Could not upload /tmp/my image.png: attaching files requires write access to the repository",
+    );
+  });
+});
+
+describe("ghNotInstalledError", () => {
+  it("returns AxiError with GH_NOT_INSTALLED code", () => {
+    const err = ghNotInstalledError();
+    expect(err).toBeInstanceOf(AxiError);
+    expect(err.code).toBe("GH_NOT_INSTALLED");
+    expect(err.message).toContain("gh CLI");
+  });
+});
+
+describe("exitCodeForError", () => {
+  it("returns 2 for VALIDATION_ERROR", () => {
+    const err = new AxiError("missing flag", "VALIDATION_ERROR");
+    expect(exitCodeForError(err)).toBe(2);
+  });
+
+  it("returns 1 for NOT_FOUND", () => {
+    const err = new AxiError("not found", "NOT_FOUND");
+    expect(exitCodeForError(err)).toBe(1);
+  });
+
+  it("returns 1 for REPO_NOT_FOUND", () => {
+    const err = new AxiError("repo not found", "REPO_NOT_FOUND");
+    expect(exitCodeForError(err)).toBe(1);
+  });
+
+  it("returns 1 for AUTH_REQUIRED", () => {
+    const err = new AxiError("auth required", "AUTH_REQUIRED");
+    expect(exitCodeForError(err)).toBe(1);
+  });
+
+  it("returns 1 for FORBIDDEN", () => {
+    const err = new AxiError("forbidden", "FORBIDDEN");
+    expect(exitCodeForError(err)).toBe(1);
+  });
+
+  it("returns 1 for RATE_LIMITED", () => {
+    const err = new AxiError("rate limited", "RATE_LIMITED");
+    expect(exitCodeForError(err)).toBe(1);
+  });
+
+  it("returns 1 for GH_NOT_INSTALLED", () => {
+    const err = new AxiError("gh missing", "GH_NOT_INSTALLED");
+    expect(exitCodeForError(err)).toBe(1);
+  });
+
+  it("returns 1 for UNKNOWN", () => {
+    const err = new AxiError("unknown", "UNKNOWN");
+    expect(exitCodeForError(err)).toBe(1);
+  });
+
+  it("returns 1 for non-AxiError", () => {
+    const err = new Error("generic error");
+    expect(exitCodeForError(err)).toBe(1);
+  });
+});

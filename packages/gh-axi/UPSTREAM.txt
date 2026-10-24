@@ -1,0 +1,5 @@
+Upstream: https://github.com/kunchenguid/gh-axi
+Commit:   400b911985dc20a285a049b330d1467947588e97
+Date:     2026-10-18T07:04:42-07:00
+Source README: https://github.com/kunchenguid/gh-axi#readme
+Snapshot of tracked files at the commit above. Excluded: .github/ (upstream CI/publish config).

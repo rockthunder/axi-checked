@@ -1,0 +1,420 @@
+import { AxiError, exitCodeForError } from "axi-sdk-js";
+
+export type ErrorCode =
+  | "REPO_NOT_FOUND"
+  | "NOT_FOUND"
+  | "AUTH_REQUIRED"
+  | "FORBIDDEN"
+  | "VALIDATION_ERROR"
+  | "RATE_LIMITED"
+  | "GH_NOT_INSTALLED"
+  | "UNKNOWN";
+
+export { AxiError, exitCodeForError };
+
+function toAxiError(error: unknown): AxiError {
+  return error instanceof AxiError
+    ? error
+    : new AxiError(
+        error instanceof Error ? error.message : String(error),
+        "UNKNOWN",
+      );
+}
+
+export class MutationFollowupError extends AxiError {
+  constructor(
+    readonly mutationState: string,
+    readonly followupError: AxiError,
+  ) {
+    super(
+      `Mutation succeeded at ${mutationState}, but follow-up operation failed: ${followupError.message}`,
+      followupError.code,
+      [
+        `Do not retry the mutation; inspect ${mutationState} before retrying the follow-up operation`,
+        ...followupError.suggestions,
+      ],
+    );
+    this.name = "MutationFollowupError";
+  }
+
+  static from(mutationState: string, error: unknown): MutationFollowupError {
+    return new MutationFollowupError(mutationState, toAxiError(error));
+  }
+}
+
+export class OperationOutcomeError extends AxiError {
+  readonly operationOutcomes: Record<string, string>;
+  readonly assetUrls: string[];
+
+  constructor(
+    error: AxiError,
+    operationOutcomes: Record<string, string>,
+    assetUrls: string[] = [],
+  ) {
+    super(error.message, error.code, error.suggestions);
+    this.name = "OperationOutcomeError";
+    this.operationOutcomes = operationOutcomes;
+    this.assetUrls = assetUrls;
+  }
+}
+
+export class AttachmentMutationError extends OperationOutcomeError {
+  constructor(
+    readonly stdout: string,
+    readonly mutationUrl: string,
+    readonly attachmentError: AxiError,
+    readonly followupError?: AxiError,
+    operationOutcomes: Record<string, string> = {
+      attachment_operation: "failed",
+    },
+    assetUrls: string[] = [],
+  ) {
+    super(
+      new AxiError(
+        `Mutation succeeded at ${mutationUrl}, but attachment upload failed: ${attachmentError.message}${followupError ? `; follow-up operation failed: ${followupError.message}` : ""}`,
+        attachmentError.code,
+        [
+          `Do not retry the mutation; inspect ${mutationUrl} before uploading missing attachments`,
+          ...attachmentError.suggestions,
+          ...(followupError?.suggestions ?? []),
+        ],
+      ),
+      operationOutcomes,
+      assetUrls,
+    );
+    this.name = "AttachmentMutationError";
+  }
+
+  withFollowupError(error: unknown): AttachmentMutationError {
+    return new AttachmentMutationError(
+      this.stdout,
+      this.mutationUrl,
+      this.attachmentError,
+      toAxiError(error),
+      this.operationOutcomes,
+      this.assetUrls,
+    );
+  }
+
+  withResults(
+    assetUrls: string[],
+    operationOutcomes: Record<string, string> = this.operationOutcomes,
+  ): AttachmentMutationError {
+    return new AttachmentMutationError(
+      this.stdout,
+      this.mutationUrl,
+      this.attachmentError,
+      this.followupError,
+      operationOutcomes,
+      assetUrls,
+    );
+  }
+}
+
+export class StackError extends AxiError {
+  constructor(
+    message: string,
+    readonly exitCode: number,
+    suggestions: string[] = [],
+  ) {
+    super(message, "STACK_ERROR", suggestions);
+    this.name = "StackError";
+  }
+}
+
+interface ErrorPattern {
+  pattern: RegExp;
+  code: ErrorCode;
+  message: (match: RegExpMatchArray, stderr: string) => string;
+  suggestions?: (match: RegExpMatchArray) => string[];
+}
+
+const patterns: ErrorPattern[] = [
+  {
+    pattern: /Could not resolve to a Repository with the name '([^']+)'/,
+    code: "REPO_NOT_FOUND",
+    message: (m) => `Repository "${m[1]}" not found`,
+    suggestions: () => ["Run `gh-axi repo list` to see your repositories"],
+  },
+  {
+    pattern: /Could not resolve to an? .+? with the number of (\d+)/,
+    code: "NOT_FOUND",
+    message: (m) => `Item #${m[1]} does not exist in this repository`,
+    suggestions: () => [],
+  },
+  {
+    pattern: /the '([^']+)' repository has discussions disabled/i,
+    code: "VALIDATION_ERROR",
+    message: (m) => `Discussions are disabled for ${m[1]}`,
+    suggestions: () => [],
+  },
+  {
+    pattern: /^unknown category: .+$/m,
+    code: "VALIDATION_ERROR",
+    message: (m) => m[0],
+    suggestions: () => [],
+  },
+  {
+    pattern: /unknown command "discussion" for "gh"/i,
+    code: "VALIDATION_ERROR",
+    message: () =>
+      "The installed gh has no `gh discussion` command; upgrade gh (checked on gh 2.100.0)",
+    suggestions: () => [],
+  },
+  {
+    pattern: /issue (\d+) not found/i,
+    code: "NOT_FOUND",
+    message: (m) => `Issue #${m[1]} does not exist`,
+    suggestions: () => [],
+  },
+  {
+    pattern: /pull request (\d+) not found/i,
+    code: "NOT_FOUND",
+    message: (m) => `Pull request #${m[1]} does not exist`,
+    suggestions: () => [],
+  },
+  {
+    pattern: /release with tag "([^"]+)" not found/i,
+    code: "NOT_FOUND",
+    message: (m) => `Release "${m[1]}" not found`,
+    suggestions: () => [
+      `Run \`gh-axi release list\` to see available releases`,
+    ],
+  },
+  {
+    pattern: /run (\d+) not found/i,
+    code: "NOT_FOUND",
+    message: (m) => `Run ${m[1]} not found`,
+    suggestions: () => [`Run \`gh-axi run list\` to see recent runs`],
+  },
+  {
+    // gh tacks a `gh auth login` hint onto its repo-resolution failure, but the
+    // token is fine: gh just could not work out which repository to target from
+    // the git remotes (unknown host, SSH host alias, no GitHub remote). Must sit
+    // ahead of the generic `gh auth login` pattern below, which would otherwise
+    // report a bogus AUTH_REQUIRED.
+    pattern:
+      /none of the git remotes configured for this repository point to a known GitHub host/i,
+    code: "VALIDATION_ERROR",
+    message: () =>
+      "Could not determine the target repository from this checkout's git remotes",
+    suggestions: () => [
+      "Pass the repo explicitly: `-R <owner>/<name>` (after the command)",
+      "For a GitHub Enterprise host, add `--hostname <host>` or set GH_HOST",
+    ],
+  },
+  {
+    pattern: /gh auth login/,
+    code: "AUTH_REQUIRED",
+    message: () => "GitHub auth required — run `gh auth login` first",
+  },
+  {
+    pattern: /authentication token is missing required scopes \[([^\]]+)\]/i,
+    code: "FORBIDDEN",
+    message: (m) => `GitHub token is missing required scope(s): ${m[1]}`,
+    suggestions: (m) => [
+      `Run \`gh auth refresh -s ${m[1]}\` to grant the required scope`,
+      "Then verify with `gh auth status`",
+    ],
+  },
+  {
+    pattern: /secondary rate limit/i,
+    code: "RATE_LIMITED",
+    message: () => "GitHub secondary rate limit hit — wait ~60s and retry",
+    suggestions: () => [
+      "Wait 60s before retrying",
+      "Use `gh api` (REST) for read-only ops, which has a separate budget",
+    ],
+  },
+  {
+    pattern: /API rate limit (?:already )?exceeded/i,
+    code: "RATE_LIMITED",
+    message: () => "GitHub API rate limit exceeded",
+    suggestions: () => [
+      "Wait until the hourly window resets (run `gh api rate_limit` to check)",
+      "Use a different identity with `gh auth switch` if available",
+    ],
+  },
+  {
+    pattern: /sub-issue is already a sub-issue of issue with number (\d+)/i,
+    code: "VALIDATION_ERROR",
+    message: (m) => `Issue is already a sub-issue of #${m[1]}`,
+  },
+  {
+    pattern: /sub-?issue.*?(cycle|circular)/i,
+    code: "VALIDATION_ERROR",
+    message: () => "Cannot add sub-issue: would create a cycle",
+  },
+  {
+    pattern: /issue cannot be a sub-?issue of itself/i,
+    code: "VALIDATION_ERROR",
+    message: () => "An issue cannot be a sub-issue of itself",
+  },
+  {
+    // gh 2.87 and older reject --duplicate-of as an unknown flag and
+    // `--reason duplicate` as an invalid enum value. Must sit ahead of any
+    // broader unknown-flag pattern so the upgrade hint is not swallowed.
+    pattern:
+      /unknown flag: --duplicate-of|invalid argument "duplicate" for "-r, --reason" flag/,
+    code: "VALIDATION_ERROR",
+    message: () =>
+      "Closing as duplicate (--duplicate-of / --reason duplicate) requires gh >= 2.88.0. Upgrade gh, or set GH_BIN to a 2.88.0+ binary",
+    suggestions: () => [
+      "Install GitHub CLI 2.88.0 or newer from https://github.com/cli/cli/releases",
+      "Or point GH_BIN at a 2.88.0+ gh binary",
+    ],
+  },
+  {
+    // gh 2.98 and older reject --attach as an unknown flag. Must sit ahead of
+    // any broader unknown-flag pattern so the upgrade hint is not swallowed.
+    pattern: /unknown flag: --attach/,
+    code: "VALIDATION_ERROR",
+    message: () =>
+      "--attach requires gh >= 2.99.0. Upgrade gh, or set GH_BIN to a 2.99.0+ binary",
+    suggestions: () => [
+      "Install GitHub CLI 2.99.0 or newer from https://github.com/cli/cli/releases",
+      "Or point GH_BIN at a 2.99.0+ gh binary",
+    ],
+  },
+  {
+    pattern: /`--attach` accepts at most 50 values per command/,
+    code: "VALIDATION_ERROR",
+    message: () => "--attach accepts at most 50 values per command",
+  },
+  {
+    pattern: /`--attach` is not supported when using (`--\S+`)/,
+    code: "VALIDATION_ERROR",
+    message: (m) => `--attach cannot be combined with ${m[1]}`,
+  },
+  {
+    pattern:
+      /^could not upload ([^\n]+)\nattaching files requires write access to the repository$/im,
+    code: "FORBIDDEN",
+    message: (m) =>
+      `Could not upload ${m[1]}: attaching files requires write access to the repository`,
+  },
+  {
+    pattern: /cannot set alt text on video/,
+    code: "VALIDATION_ERROR",
+    message: () => "--attach: cannot set alt text on video",
+  },
+  {
+    pattern: /^(.+?) is not a supported file type \(supported: ([^)]+)\)$/m,
+    code: "VALIDATION_ERROR",
+    message: (m) =>
+      `--attach ${m[1]} is not a supported file type (supported: ${m[2]})`,
+  },
+  {
+    pattern: /^(.+?): images must be at most ([^\n]+)$/m,
+    code: "VALIDATION_ERROR",
+    message: (m) => `--attach ${m[1]}: images must be at most ${m[2].trim()}`,
+  },
+  {
+    pattern: /^(.+?): videos must be at most ([^\n]+)$/m,
+    code: "VALIDATION_ERROR",
+    message: (m) => `--attach ${m[1]}: videos must be at most ${m[2].trim()}`,
+  },
+  {
+    pattern:
+      /attach(?:ment)? uploads? (?:are|is) not (?:supported|available).*(?:Enterprise Server|GHES)/i,
+    code: "VALIDATION_ERROR",
+    message: () =>
+      "--attach is not supported on GitHub Enterprise Server in this gh release",
+  },
+  {
+    // gh quotes a multi-word query argument whose first token is a qualifier,
+    // so `"review-requested:@me created:>=2026-01-01"` becomes
+    // `review-requested:"@me created:>=2026-01-01"` and GitHub rejects it.
+    pattern: /Invalid search query "\( ([\w-]+):\\"([^"\s]+\s[^"]*)\\" \)/,
+    code: "VALIDATION_ERROR",
+    message: (m) =>
+      `The \`${m[1]}:\` qualifier swallowed the rest of the query ("${m[2]}"): gh quotes a multi-word query argument that starts with a qualifier`,
+    suggestions: (m) => [
+      `Pass each term as its own argument: ${[`${m[1]}:${m[2].split(/\s+/)[0]}`, ...m[2].split(/\s+/).slice(1)].map((t) => `'${t.replace(/'/g, "'\\''")}'`).join(" ")}`,
+      "Or move filters to flags (--repo, --owner, --author, --state, --label)",
+    ],
+  },
+  {
+    pattern: /HTTP 403/,
+    code: "FORBIDDEN",
+    message: () => "Insufficient permissions for this action",
+  },
+  {
+    pattern: /HTTP 422/,
+    code: "VALIDATION_ERROR",
+    message: (_m, stderr) => validationMessage(stderr) ?? "Validation error",
+  },
+];
+
+/** Collapse a possibly multi-line gh message into one line. */
+function joinLines(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "")
+    .join(" ");
+}
+
+/**
+ * Extract GitHub's explanation from a 422 failure. gh reports it in one of
+ * three shapes, tried in order:
+ * - a raw JSON body carrying `"message": "..."`;
+ * - `gh api`'s formatted form, `gh: <message>\n\n<errors...> (HTTP 422)`,
+ *   where the message and per-field errors can span several lines;
+ * - the go-gh HTTPError form used by other commands,
+ *   `HTTP 422: <message> (<url>)` followed by optional error lines.
+ */
+function validationMessage(stderr: string): string | undefined {
+  const json = stderr.match(/"message"\s*:\s*"([^"]+)"/);
+  if (json) return json[1];
+
+  const ghApi = stderr.match(/(?:^|\n)gh: ([\s\S]*?)\s*\(HTTP 422\)/);
+  if (ghApi) {
+    const text = joinLines(ghApi[1]);
+    if (text) return text;
+  }
+
+  const httpError = stderr.match(
+    /HTTP 422: ([^\n]*?)(?: \(https?:\/\/[^\s)]+\))?(\n[\s\S]*)?$/,
+  );
+  if (httpError) {
+    const text = joinLines(`${httpError[1]}\n${httpError[2] ?? ""}`);
+    if (text) return text;
+  }
+
+  return undefined;
+}
+
+function firstErrorLine(stderr: string): string {
+  return stderr.trim().split("\n")[0] ?? "";
+}
+
+export function mapGhError(stderr: string, exitCode: number): AxiError {
+  for (const { pattern, code, message, suggestions } of patterns) {
+    const match = stderr.match(pattern);
+    if (match) {
+      return new AxiError(
+        message(match, stderr),
+        code,
+        suggestions?.(match) ?? [],
+      );
+    }
+  }
+
+  // Generic not-found for any 404-like message
+  if (/not found/i.test(stderr)) {
+    return new AxiError(firstErrorLine(stderr), "NOT_FOUND");
+  }
+
+  return new AxiError(
+    firstErrorLine(stderr) || `gh exited with code ${exitCode}`,
+    "UNKNOWN",
+  );
+}
+
+export function ghNotInstalledError(): AxiError {
+  return new AxiError(
+    "gh CLI is not installed — see https://cli.github.com",
+    "GH_NOT_INSTALLED",
+  );
+}
