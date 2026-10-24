@@ -315,7 +315,9 @@ export async function serve({
   const { WebSocket, WebSocketServer } = await import("ws");
   const extraHosts = allowedHosts ?? extraAllowedHosts(env);
   const envHost = env.LAVISH_AXI_HOST?.trim();
-  const autoTailscale = !envHost;
+  // Corporate build: never auto-bind the Tailscale address (it would expose the local editor to the
+  // whole tailnet). Explicit LAVISH_AXI_HOST / --also-listen still work.
+  const autoTailscale = false;
   const detect = detectTailscaleFn === undefined ? detectTailscale : detectTailscaleFn;
   const tailscale = !hosts?.length && autoTailscale && typeof detect === "function" ? await detect() : null;
   const requestedListenHosts = sanitizeListenHosts(
