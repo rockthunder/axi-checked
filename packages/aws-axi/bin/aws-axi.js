@@ -872,7 +872,7 @@ function hookCommand() {
 }
 
 function skillContent() {
-  return `---\nname: aws-axi\ndescription: Use aws-axi to discover, plan, provision, deploy, inspect, and troubleshoot AWS hosting, backend, database, and AI workloads through safe TOON CLI workflows.\n---\n\n# aws-axi\n\nUse \`aws-axi\` when a task involves AWS architecture, hosting, deployments, service recommendations, infrastructure status, CloudWatch logs, or production safety checks.\n\nRun \`npx -y aws-axi\` for live context. Use \`npx -y aws-axi doctor\` before production work. Plan before applying: \`npx -y aws-axi plan --target <id> --environment <name>\`. Mutations require \`--execute\`; production also requires \`--confirm-account <account-id>\`.\n`;
+  return `---\nname: aws-axi\ndescription: Use aws-axi to discover, plan, provision, deploy, inspect, and troubleshoot AWS hosting, backend, database, and AI workloads through safe TOON CLI workflows.\n---\n\n# aws-axi\n\nUse \`aws-axi\` when a task involves AWS architecture, hosting, deployments, service recommendations, infrastructure status, CloudWatch logs, or production safety checks.\n\nRun \`aws-axi\` for live context. Use \`aws-axi doctor\` before production work. Plan before applying: \`aws-axi plan --target <id> --environment <name>\`. Mutations require \`--execute\`; production also requires \`--confirm-account <account-id>\`.\n`;
 }
 
 function usageError(message, help, code = 2) {

@@ -7,4 +7,4 @@ description: Use kubernetes-axi to discover, inspect, deploy, debug, scale, roll
 
 Use `kubernetes-axi` when a task involves kubectl, manifests, Helm, Kustomize, pods, deployments, services, rollouts, logs, events, or cluster debugging.
 
-Run `npx -y kubernetes-axi` for live context. Use `npx -y kubernetes-axi doctor` before cluster work. Discover targets with `npx -y kubernetes-axi discover`. Plan before mutating: `npx -y kubernetes-axi plan --target <id> --environment <name>`. Mutations require `--execute`. Destructive deletes also require `--confirm <exact-name>`.
+Run `kubernetes-axi` for live context. Use `kubernetes-axi doctor` before cluster work. Discover targets with `kubernetes-axi discover`. Plan before mutating: `kubernetes-axi plan --target <id> --environment <name>`. Mutations require `--execute`. Destructive deletes also require `--confirm <exact-name>`.

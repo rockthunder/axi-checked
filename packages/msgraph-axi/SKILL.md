@@ -12,8 +12,8 @@ first surface. It runs the [CLI for Microsoft 365](https://pnp.github.io/cli-mic
 generic `m365 request` bridge for the rest. The m365 syntax is a backend detail — never
 expose `m365 ...` command lines to the user.
 
-Install globally: `npm install -g @jeffreyhaen/msgraph-axi @pnp/cli-microsoft365`. If
-`msgraph-axi` is not on PATH, prefix with `npx -y @jeffreyhaen/msgraph-axi`.
+Install `msgraph-axi` and `@pnp/cli-microsoft365` from your organisation's vetted repository (do not fetch
+them from the public registry with `npx`). If `msgraph-axi` is not on PATH, ask the user to install it.
 
 ## Orientation
 
