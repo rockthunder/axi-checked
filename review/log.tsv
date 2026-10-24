@@ -1,0 +1,6 @@
+packages/axi/packages/axi-sdk-js/src/cli.ts	OK	295	Dispatcher. No network/exec. 'update' now only prints a disabled error. Dead helper resolveBinName and stale 'packageName' doc comment remain (harmless).
+packages/axi/packages/axi-sdk-js/src/errors.ts	OK	18	Plain Error subclass + exit-code mapping.
+packages/axi/packages/axi-sdk-js/src/fast-path.ts	OK	54	Dependency-free --version fast path; writes the version string only.
+packages/axi/packages/axi-sdk-js/src/index.ts	OK	3	Re-exports only.
+packages/axi/packages/axi-sdk-js/src/output.ts	OK	77	TOON encoding of output; only reads homedir() to shorten the displayed bin path.
+packages/axi/packages/axi-sdk-js/src/hooks.ts	MANUAL	946	Explicit opt-in (setup hooks) but powerful and persistent: writes SessionStart hooks into ~/.claude/settings.json, ~/.codex/hooks.json (or project .claude/.codex), an OpenCode plugin, and ENABLES the global [features] hooks=true flag in ~/.codex/config.toml. Hook command is an unquoted exec path or a bare binary name resolved through PATH at every agent session start (PATH-hijack / spaces-in-path risk); command-substring match (includes(marker)) can overwrite an unrelated hook that merely mentions the tool name. No network. Decide whether your org allows 'setup hooks' at all (or remove the call from each tool's setup command).

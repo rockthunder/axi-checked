@@ -5,6 +5,7 @@
   pending [package] [N]     next N unread files (default 15), highest tier first
   log <path> <VERDICT> <note...>   record that <path> was read.  VERDICT: OK | NOTE | PATCHED | MANUAL
   manual                    list every MANUAL / NOTE entry
+  render-manual             regenerate review/MANUAL-REVIEW.md from the log
 
 Tiers (read order):  1 = entrypoints, network/process/credential/server code, SDK;  2 = other runtime source;
                      3 = build/dev scripts;  4 = vendored generated bundles;  5 = agent-facing markdown (SKILL/AGENTS/CLAUDE/playbooks)
@@ -130,6 +131,20 @@ def main():
         todo.sort(key=lambda r: (int(r[3]), r[0], r[1]))
         for r in todo[:n]: print(f"tier{r[3]} {r[2]:>6} {r[1]}")
         print(f"({len(todo)} pending{' in ' + pkg if pkg else ''})")
+    elif cmd == "render-manual":
+        out = ["# Items for a human to review", "",
+               "Generated from `review/log.tsv` by `python -I scripts/review-status.py render-manual`. **MANUAL** = high risk or unsure: please look yourself. **NOTE** = minor, benign-but-worth-knowing.", ""]
+        for want, title in (("MANUAL", "## MANUAL - needs your review"), ("NOTE", "## NOTE - minor observations")):
+            ents = sorted((e for e in log.values() if e[1] == want), key=lambda e: e[0])
+            out += [title, ""]
+            if not ents: out += ["_(none)_", ""]
+            for e in ents:
+                out.append("- `" + e[0] + "`")
+                out.append("  " + (e[3] if len(e) > 3 else ""))
+            out.append("")
+        with open(os.path.join(REV, "MANUAL-REVIEW.md"), "w", encoding="utf-8", newline=chr(10)) as fh:
+            fh.write(chr(10).join(out))
+        print("wrote review/MANUAL-REVIEW.md")
     elif cmd == "manual":
         for e in log.values():
             if e[1] in ("MANUAL", "NOTE"): print(f"{e[1]:6} {e[0]}  {e[3] if len(e) > 3 else ''}")
