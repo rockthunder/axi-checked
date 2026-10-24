@@ -1,0 +1,5 @@
+Upstream: https://github.com/JarvusInnovations/metabase-axi
+Commit:   013acc64fbfbeed44014bb9ee856095dfab36174
+Date:     2026-06-26T22:34:02-04:00
+Source README: https://github.com/JarvusInnovations/metabase-axi#readme
+Snapshot of tracked files at the commit above. Excluded: .github/ (upstream CI/publish config).

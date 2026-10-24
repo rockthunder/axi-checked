@@ -1,0 +1,62 @@
+{
+  "name": "metabase-axi",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Agent-ergonomic CLI for the Metabase API — query, explore, and export from the terminal with token-efficient output.",
+  "bin": {
+    "metabase-axi": "dist/bin/metabase-axi.js"
+  },
+  "files": [
+    "dist",
+    "skills/metabase-axi",
+    "LICENSE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc && chmod +x dist/bin/metabase-axi.js",
+    "dev": "bun bin/metabase-axi.ts",
+    "lint": "oxlint src bin test",
+    "format": "oxfmt src bin test",
+    "format:check": "oxfmt --check src bin test",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@toon-format/toon": "^2.3.0",
+    "axi-sdk-js": "^0.1.7"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "oxfmt": "^0.56.0",
+    "oxlint": "^1.71.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JarvusInnovations/metabase-axi.git"
+  },
+  "homepage": "https://github.com/JarvusInnovations/metabase-axi#readme",
+  "bugs": {
+    "url": "https://github.com/JarvusInnovations/metabase-axi/issues"
+  },
+  "author": "Jarvus Innovations",
+  "keywords": [
+    "metabase",
+    "axi",
+    "cli",
+    "agent",
+    "sql",
+    "analytics",
+    "toon"
+  ]
+}
