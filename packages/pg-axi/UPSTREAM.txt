@@ -1,0 +1,5 @@
+Upstream: https://github.com/thatdudealso/pg-axi
+Commit:   48701411a50d45458f5fffb627f93eef0d57a0b3
+Date:     2026-07-09T22:51:21-04:00
+Source README: https://github.com/thatdudealso/pg-axi#readme
+Snapshot of tracked files at the commit above. Excluded: .github/ (upstream CI/publish config).
