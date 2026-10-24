@@ -41,6 +41,33 @@ export async function listRecentRevisions(
   }));
 }
 
+/**
+ * Corporate-build guard: an `exportLinks` URL arrives inside an API response, so it is data. The
+ * OAuth bearer token is attached to it, so it must be https and on a Google host.
+ */
+export function assertGoogleHttpsUrl(raw: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new AxiError("Export link is not a valid URL", "REVISION_CONTENT_UNAVAILABLE", []);
+  }
+  const host = parsed.hostname.toLowerCase();
+  const googleHost =
+    host === "google.com" ||
+    host.endsWith(".google.com") ||
+    host === "googleapis.com" ||
+    host.endsWith(".googleapis.com") ||
+    host.endsWith(".googleusercontent.com");
+  if (parsed.protocol !== "https:" || !googleHost) {
+    throw new AxiError(
+      `Refusing to send credentials to a non-Google export link (${parsed.protocol}//${host})`,
+      "REVISION_CONTENT_UNAVAILABLE",
+      [],
+    );
+  }
+}
+
 export interface NativeRevisionExport {
   bytes: Buffer;
   /** The mime that was actually exported (may differ from the request on fallback). */
@@ -122,6 +149,10 @@ export async function fetchNativeRevisionExport(
       ],
     );
   }
+
+  // Corporate build: the bearer token is only ever sent to https Google hosts, never to an
+  // arbitrary URL that came back in an API response.
+  assertGoogleHttpsUrl(url);
 
   const auth = await oauthClientForAccount(account);
   const { token } = await auth.getAccessToken();
