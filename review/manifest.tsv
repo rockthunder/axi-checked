@@ -20,7 +20,7 @@ atlassian-axi/confluence-axi	packages/atlassian-axi/packages/confluence-axi/src/
 atlassian-axi/confluence-axi	packages/atlassian-axi/packages/confluence-axi/src/commands/auth.ts	552	1
 atlassian-axi/confluence-axi	packages/atlassian-axi/packages/confluence-axi/src/commands/confluence/shared.ts	342	1
 atlassian-axi/confluence-axi	packages/atlassian-axi/packages/confluence-axi/src/commands/setup.ts	67	1
-atlassian-axi/confluence-axi	packages/atlassian-axi/packages/confluence-axi/src/config.ts	710	1
+atlassian-axi/confluence-axi	packages/atlassian-axi/packages/confluence-axi/src/config.ts	725	1
 atlassian-axi/confluence-axi	packages/atlassian-axi/packages/confluence-axi/src/oauth.ts	614	1
 atlassian-axi/confluence-axi	packages/atlassian-axi/packages/confluence-axi/tsup.config.ts	15	1
 atlassian-axi/core	packages/atlassian-axi/packages/core/eslint.config.mjs	2	1
@@ -46,10 +46,10 @@ canva-axi	packages/canva-axi/src/api/client.ts	279	1
 canva-axi	packages/canva-axi/src/index.ts	12	1
 chrome-devtools-axi	packages/chrome-devtools-axi/bin/chrome-devtools-axi-bridge.ts	10	1
 chrome-devtools-axi	packages/chrome-devtools-axi/bin/chrome-devtools-axi.ts	8	1
-chrome-devtools-axi	packages/chrome-devtools-axi/src/bridge-script.ts	50	1
-chrome-devtools-axi	packages/chrome-devtools-axi/src/bridge.ts	1294	1
+chrome-devtools-axi	packages/chrome-devtools-axi/src/bridge-script.ts	77	1
+chrome-devtools-axi	packages/chrome-devtools-axi/src/bridge.ts	1337	1
 chrome-devtools-axi	packages/chrome-devtools-axi/src/cli.ts	1870	1
-chrome-devtools-axi	packages/chrome-devtools-axi/src/client.ts	956	1
+chrome-devtools-axi	packages/chrome-devtools-axi/src/client.ts	996	1
 chrome-devtools-axi	packages/chrome-devtools-axi/src/hooks.ts	108	1
 chrome-devtools-axi	packages/chrome-devtools-axi/src/run.ts	392	1
 clockify-axi	packages/clockify-axi/bin/clockify-axi.ts	8	1
@@ -59,7 +59,7 @@ cloudflare-axi	packages/cloudflare-axi/bin/cloudflare-axi.ts	8	1
 cloudflare-axi	packages/cloudflare-axi/src/cli.ts	130	1
 cloudflare-axi	packages/cloudflare-axi/src/config.ts	212	1
 cloudflare-axi	packages/cloudflare-axi/src/credentials.ts	111	1
-elasticsearch-axi	packages/elasticsearch-axi/bin/elasticsearch-axi.js	1528	1
+elasticsearch-axi	packages/elasticsearch-axi/bin/elasticsearch-axi.js	1534	1
 figma-axi	packages/figma-axi/bin/figma-axi.js	2	1
 figma-axi	packages/figma-axi/src/commands/export.ts	91	1
 figma-axi	packages/figma-axi/src/figma/token.ts	61	1
@@ -94,7 +94,7 @@ homebrew-axi	packages/homebrew-axi/src/cli.ts	31	1
 homebrew-axi	packages/homebrew-axi/src/commands/installed.ts	87	1
 homebrew-axi	packages/homebrew-axi/src/commands/setup.ts	17	1
 homebrew-axi	packages/homebrew-axi/vitest.config.ts	8	1
-kubernetes-axi	packages/kubernetes-axi/bin/kubernetes-axi.js	1141	1
+kubernetes-axi	packages/kubernetes-axi/bin/kubernetes-axi.js	1159	1
 lavish-axi	packages/lavish-axi/bin/lavish-axi-server.js	23	1
 lavish-axi	packages/lavish-axi/bin/lavish-axi.js	4	1
 lavish-axi	packages/lavish-axi/eslint.config.js	20	1
@@ -114,7 +114,7 @@ metabase-axi	packages/metabase-axi/src/metabase/server.ts	55	1
 msgraph-axi	packages/msgraph-axi/src/bin/msgraph-axi.ts	8	1
 msgraph-axi	packages/msgraph-axi/src/commands/auth.ts	147	1
 msgraph-axi	packages/msgraph-axi/src/main.ts	251	1
-pg-axi	packages/pg-axi/bin/pg-axi.js	1103	1
+pg-axi	packages/pg-axi/bin/pg-axi.js	1195	1
 reactive-axi/reactive-axi	packages/reactive-axi/packages/reactive-axi/bin/reactive-axi.js	9	1
 reactive-axi/reactive-axi	packages/reactive-axi/packages/reactive-axi/eslint.config.js	54	1
 reactive-axi/reactive-axi	packages/reactive-axi/packages/reactive-axi/src/chrome-client.js	741	1
@@ -123,7 +123,7 @@ reactive-axi/reactive-axi	packages/reactive-axi/packages/reactive-axi/src/dev-se
 reactive-axi/reactive-axi	packages/reactive-axi/packages/reactive-axi/src/framework-adapters/webpack-dev-server.js	69	1
 reactive-axi/reactive-axi	packages/reactive-axi/packages/reactive-axi/src/proxy.js	103	1
 reactive-axi/reactive-axi	packages/reactive-axi/packages/reactive-axi/src/server.js	1036	1
-redis-axi	packages/redis-axi/bin/redis-axi.js	1485	1
+redis-axi	packages/redis-axi/bin/redis-axi.js	1550	1
 screencast-axi	packages/screencast-axi/bin/screencast-axi.ts	16	1
 screencast-axi	packages/screencast-axi/src/browser.ts	313	1
 screencast-axi	packages/screencast-axi/src/cli.ts	242	1
@@ -181,7 +181,7 @@ atlassian-axi/confluence-axi	packages/atlassian-axi/packages/confluence-axi/src/
 atlassian-axi/confluence-axi	packages/atlassian-axi/packages/confluence-axi/src/confluence.ts	194	2
 atlassian-axi/confluence-axi	packages/atlassian-axi/packages/confluence-axi/src/errors.ts	116	2
 atlassian-axi/confluence-axi	packages/atlassian-axi/packages/confluence-axi/src/prompt.ts	91	2
-atlassian-axi/confluence-axi	packages/atlassian-axi/packages/confluence-axi/src/skill.ts	86	2
+atlassian-axi/confluence-axi	packages/atlassian-axi/packages/confluence-axi/src/skill.ts	85	2
 atlassian-axi/confluence-axi	packages/atlassian-axi/packages/confluence-axi/src/suggestions.ts	190	2
 atlassian-axi/core	packages/atlassian-axi/packages/core/src/args.ts	99	2
 atlassian-axi/core	packages/atlassian-axi/packages/core/src/body.ts	277	2
@@ -200,7 +200,7 @@ atlassian-axi/jira-axi	packages/atlassian-axi/packages/jira-axi/src/commands/jir
 atlassian-axi/jira-axi	packages/atlassian-axi/packages/jira-axi/src/commands/jira/sprint.ts	366	2
 atlassian-axi/jira-axi	packages/atlassian-axi/packages/jira-axi/src/commands/jira/workitem.ts	842	2
 atlassian-axi/jira-axi	packages/atlassian-axi/packages/jira-axi/src/errors.ts	117	2
-atlassian-axi/jira-axi	packages/atlassian-axi/packages/jira-axi/src/skill.ts	90	2
+atlassian-axi/jira-axi	packages/atlassian-axi/packages/jira-axi/src/skill.ts	89	2
 atlassian-axi/jira-axi	packages/atlassian-axi/packages/jira-axi/src/suggestions.ts	313	2
 canva-axi	packages/canva-axi/src/cli/args.ts	103	2
 canva-axi	packages/canva-axi/src/cli/router.ts	152	2
@@ -346,7 +346,7 @@ gws-axi	packages/gws-axi/src/commands/docs/markdown.ts	466	2
 gws-axi	packages/gws-axi/src/commands/docs/md-to-doc.ts	1261	2
 gws-axi	packages/gws-axi/src/commands/docs/read.ts	386	2
 gws-axi	packages/gws-axi/src/commands/docs/replace-text.ts	275	2
-gws-axi	packages/gws-axi/src/commands/docs/revision-content.ts	145	2
+gws-axi	packages/gws-axi/src/commands/docs/revision-content.ts	176	2
 gws-axi	packages/gws-axi/src/commands/docs/span-table.ts	195	2
 gws-axi	packages/gws-axi/src/commands/docs/tab-ops.ts	405	2
 gws-axi	packages/gws-axi/src/commands/docs/tabs.ts	275	2
@@ -535,7 +535,7 @@ slack-axi	packages/slack-axi/src/output.ts	63	2
 slack-axi	packages/slack-axi/src/session.ts	49	2
 slack-axi	packages/slack-axi/src/slack/cache.ts	284	2
 slack-axi	packages/slack-axi/src/slack/errors.ts	85	2
-slack-axi	packages/slack-axi/src/slack/files.ts	131	2
+slack-axi	packages/slack-axi/src/slack/files.ts	160	2
 slack-axi	packages/slack-axi/src/slack/format.ts	36	2
 slack-axi	packages/slack-axi/src/slack/permalink.ts	11	2
 slack-axi	packages/slack-axi/src/slack/reactions.ts	88	2
@@ -550,7 +550,6 @@ atlassian-axi/jira-axi	packages/atlassian-axi/packages/jira-axi/scripts/build-sk
 axi	packages/axi/scripts/generate-docs.mjs	301	3
 canva-axi	packages/canva-axi/scripts/gen-skill.mjs	41	3
 chrome-devtools-axi	packages/chrome-devtools-axi/scripts/build-skill.ts	39	3
-cloudflare-axi	packages/cloudflare-axi/.claude/skills/repo-triage/scripts/fetch.py	1136	3
 figma-axi	packages/figma-axi/scripts/gen-skill.mjs	40	3
 gh-axi	packages/gh-axi/scripts/build-skill.ts	36	3
 homebrew-axi	packages/homebrew-axi/scripts/build-skill.ts	35	3
@@ -572,8 +571,8 @@ ado-axi-dtabolich	packages/ado-axi-dtabolich/skills/ado-axi/SKILL.md	49	5
 atl-axi	packages/atl-axi/AGENTS.md	15	5
 atl-axi	packages/atl-axi/skills/atl-axi/SKILL.md	21	5
 atlassian-axi	packages/atlassian-axi/AGENTS.md	91	5
-atlassian-axi/confluence-axi	packages/atlassian-axi/packages/confluence-axi/skills/confluence-axi/SKILL.md	65	5
-atlassian-axi/jira-axi	packages/atlassian-axi/packages/jira-axi/skills/jira-axi/SKILL.md	69	5
+atlassian-axi/confluence-axi	packages/atlassian-axi/packages/confluence-axi/skills/confluence-axi/SKILL.md	64	5
+atlassian-axi/jira-axi	packages/atlassian-axi/packages/jira-axi/skills/jira-axi/SKILL.md	68	5
 aws-axi	packages/aws-axi/SKILL.md	10	5
 axi	packages/axi/.agents/skills/axi/SKILL.md	273	5
 axi	packages/axi/AGENTS.md	93	5
@@ -584,7 +583,6 @@ chrome-devtools-axi	packages/chrome-devtools-axi/AGENTS.md	49	5
 chrome-devtools-axi	packages/chrome-devtools-axi/CLAUDE.md	3	5
 chrome-devtools-axi	packages/chrome-devtools-axi/skills/chrome-devtools-axi/SKILL.md	27	5
 clockify-axi	packages/clockify-axi/skills/clockify-axi/SKILL.md	25	5
-cloudflare-axi	packages/cloudflare-axi/.claude/skills/repo-triage/SKILL.md	161	5
 cloudflare-axi	packages/cloudflare-axi/AGENTS.md	370	5
 cloudflare-axi	packages/cloudflare-axi/CLAUDE.md	1	5
 cloudflare-axi	packages/cloudflare-axi/skills/cloudflare-axi/SKILL.md	104	5
