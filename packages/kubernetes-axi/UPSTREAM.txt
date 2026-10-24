@@ -1,0 +1,5 @@
+Upstream: https://github.com/thatdudealso/kubernetes-axi
+Commit:   c05c686e02cb0074ccf1ba5284d2941c05e9a54e
+Date:     2026-07-10T23:45:34-04:00
+Source README: https://github.com/thatdudealso/kubernetes-axi#readme
+Snapshot of tracked files at the commit above. Excluded: .github/ (upstream CI/publish config).

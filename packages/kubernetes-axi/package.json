@@ -1,0 +1,34 @@
+{
+  "name": "kubernetes-axi",
+  "version": "0.1.0",
+  "description": "Agent-facing Kubernetes operations AXI for safe token-efficient CLI workflows.",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thatdudealso/kubernetes-axi.git"
+  },
+  "homepage": "https://github.com/thatdudealso/kubernetes-axi#readme",
+  "bugs": {
+    "url": "https://github.com/thatdudealso/kubernetes-axi/issues"
+  },
+  "bin": {
+    "kubernetes-axi": "./bin/kubernetes-axi.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "test:live": "KUBERNETES_AXI_LIVE_TESTS=1 node --test",
+    "skill:check": "node bin/kubernetes-axi.js skill generate --check"
+  },
+  "keywords": [
+    "kubernetes",
+    "k8s",
+    "axi",
+    "cli",
+    "toon",
+    "kubectl"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
+}
