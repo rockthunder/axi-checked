@@ -1,0 +1,31 @@
+{
+  "name": "aws-axi",
+  "version": "0.1.0",
+  "description": "Agent-facing AWS operations AXI for safe hosting, deployment, and inspection workflows.",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thatdudealso/aws-axi.git"
+  },
+  "homepage": "https://github.com/thatdudealso/aws-axi#readme",
+  "bugs": {
+    "url": "https://github.com/thatdudealso/aws-axi/issues"
+  },
+  "bin": {
+    "aws-axi": "./bin/aws-axi.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "aws",
+    "axi",
+    "cli",
+    "toon",
+    "deployment"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
+}
