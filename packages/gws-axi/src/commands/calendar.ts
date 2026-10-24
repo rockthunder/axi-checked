@@ -1,0 +1,179 @@
+import { checkFlags, type FlagSpec } from "../util/flags.js";
+import { AxiError } from "axi-sdk-js";
+import { resolveAccount, withAccountSource } from "../google/account.js";
+import { calendarCalendarsCommand, CALENDARS_HELP } from "./calendar/calendars.js";
+import { calendarCreateCommand, CREATE_HELP } from "./calendar/create.js";
+import { calendarDeleteCommand, DELETE_HELP } from "./calendar/delete.js";
+import { calendarEventsCommand, EVENTS_HELP } from "./calendar/events.js";
+import { calendarFreebusyCommand, FREEBUSY_HELP } from "./calendar/freebusy.js";
+import { calendarGetCommand, GET_HELP } from "./calendar/get.js";
+import { calendarRespondCommand, RESPOND_HELP } from "./calendar/respond.js";
+import { calendarSearchCommand, SEARCH_HELP } from "./calendar/search.js";
+import { calendarUpdateCommand, UPDATE_HELP } from "./calendar/update.js";
+
+interface CalendarSubcommand {
+  /** Flags this subcommand takes — or "self" when its own parser validates them. */
+  flags?: FlagSpec | "self";
+  name: string;
+  mutation: boolean;
+  help: string;
+  handler?: (account: string, args: string[]) => Promise<string>;
+}
+
+export const SUBCOMMANDS: CalendarSubcommand[] = [
+  {
+    name: "events",
+    mutation: false,
+    flags: {
+      value: ["--calendar", "--from", "--to", "--limit", "--query", "--fields"],
+      boolean: ["--single-events", "--today", "--this-week"],
+    },
+    help: EVENTS_HELP,
+    handler: calendarEventsCommand,
+  },
+  {
+    name: "get",
+    mutation: false,
+    flags: { value: ["--calendar"], boolean: ["--full"] },
+    help: GET_HELP,
+    handler: calendarGetCommand,
+  },
+  {
+    name: "calendars",
+    mutation: false,
+    flags: { value: ["--fields"], boolean: [] },
+    help: CALENDARS_HELP,
+    handler: calendarCalendarsCommand,
+  },
+  {
+    name: "search",
+    mutation: false,
+    flags: {
+      value: ["--query", "--from", "--to", "--calendars", "--limit", "--fields"],
+      boolean: ["--today", "--this-week", "--no-dedupe", "--include-shared"],
+    },
+    help: SEARCH_HELP,
+    handler: calendarSearchCommand,
+  },
+  {
+    name: "freebusy",
+    mutation: false,
+    flags: { value: ["--calendars", "--from", "--to"], boolean: ["--today", "--this-week"] },
+    help: FREEBUSY_HELP,
+    handler: calendarFreebusyCommand,
+  },
+  {
+    name: "create",
+    mutation: true,
+    flags: "self",
+    help: CREATE_HELP,
+    handler: calendarCreateCommand,
+  },
+  {
+    name: "update",
+    mutation: true,
+    flags: "self",
+    help: UPDATE_HELP,
+    handler: calendarUpdateCommand,
+  },
+  {
+    name: "delete",
+    mutation: true,
+    flags: { value: ["--calendar", "--send-updates"], boolean: ["--yes"] },
+    help: DELETE_HELP,
+    handler: calendarDeleteCommand,
+  },
+  {
+    name: "respond",
+    mutation: true,
+    flags: { value: ["--response", "--comment", "--calendar", "--send-updates"], boolean: [] },
+    help: RESPOND_HELP,
+    handler: calendarRespondCommand,
+  },
+];
+
+const SUB_BY_NAME: Record<string, CalendarSubcommand> = Object.fromEntries(
+  SUBCOMMANDS.map((s) => [s.name, s]),
+);
+
+function parseAccountFlag(args: string[]): {
+  account: string | undefined;
+  rest: string[];
+} {
+  const rest: string[] = [];
+  let account: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--account" && args[i + 1]) {
+      account = args[i + 1];
+      i++;
+      continue;
+    }
+    rest.push(arg);
+  }
+  return { account, rest };
+}
+
+const reads = SUBCOMMANDS.filter((s) => !s.mutation).map((s) => s.name);
+const writes = SUBCOMMANDS.filter((s) => s.mutation).map((s) => s.name);
+
+export const CALENDAR_HELP = `usage: gws-axi calendar <subcommand> [args] [--account <email>] [flags]
+reads[${reads.length}]:
+  ${reads.join(", ")}
+writes[${writes.length}]:
+  ${writes.join(", ")}
+notes:
+  Writes require --account <email> when 2+ accounts are authenticated.
+  Reads use the default account when --account is not provided.
+subcommand help:
+  gws-axi calendar events --help    for time-range / limit / field flags
+  gws-axi calendar <sub> --help     for any other subcommand
+examples:
+  gws-axi calendar events
+  gws-axi calendar events --today
+  gws-axi calendar events --this-week
+  gws-axi calendar events --from 2026-04-20 --to 2026-04-20   (all of Apr 20)
+  gws-axi calendar events --fields attendees,location
+time ranges:
+  events / search / freebusy take --today, --this-week, and --from/--to.
+  A date-only --to closes at the END of that day; tokens (now, today,
+  tomorrow, yesterday, +Nd, +Nw, +Nh) work on both edges. See
+  \`gws-axi calendar events --help\`.
+`;
+
+export async function calendarCommand(args: string[]): Promise<string> {
+  if (args.length === 0 || (args.length === 1 && args[0] === "--help")) {
+    return CALENDAR_HELP;
+  }
+
+  const sub = args[0];
+  const def = SUB_BY_NAME[sub];
+  if (!def) {
+    throw new AxiError(`Unknown calendar subcommand: ${sub}`, "VALIDATION_ERROR", [
+      `Run \`gws-axi calendar --help\` to see available subcommands`,
+    ]);
+  }
+
+  const rest = args.slice(1);
+  if (rest.includes("--help")) {
+    return def.help;
+  }
+
+  const { account: accountFlag, rest: remaining } = parseAccountFlag(rest);
+  if (def.handler && def.flags && def.flags !== "self") {
+    checkFlags(remaining, def.flags, `calendar ${sub}`);
+  }
+  const resolution = resolveAccount(accountFlag, {
+    mutation: def.mutation,
+    commandName: `calendar ${sub}`,
+  });
+
+  if (!def.handler) {
+    throw new AxiError(`gws-axi calendar ${sub} is not yet implemented`, "NOT_IMPLEMENTED", [
+      `Account resolution succeeded: would run as ${resolution.account}`,
+      `See docs/design.md for the planned command surface`,
+    ]);
+  }
+
+  return withAccountSource(resolution, await def.handler(resolution.account, remaining));
+}

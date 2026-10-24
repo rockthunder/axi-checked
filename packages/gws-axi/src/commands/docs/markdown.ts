@@ -1,0 +1,466 @@
+import type { docs_v1 } from "googleapis";
+import { DEFAULT_BODY_FONT_PT, type TableBlock, fitWidth, parseMarkdown } from "./md-to-doc.js";
+
+// Modeled on the converter in google-docs-mcp (src/server.ts:119-272).
+// We walk the StructuralElement tree and emit Markdown; images become
+// `[image: alt]` placeholders. Unknown elements fall through to their
+// textual content so the output is never lossy-silent.
+//
+// This is the inverse of md-to-doc.ts (specs/behaviors/markdown-to-doc.md):
+// Markdown written by `docs write` must read back as the same Markdown, so
+// the two share their encodings — monospace runs for code, 30pt indents for a
+// quote, a vertical tab for a hard break, a bottom border for a rule.
+
+type StructuralElement = docs_v1.Schema$StructuralElement;
+type Paragraph = docs_v1.Schema$Paragraph;
+type ParagraphElement = docs_v1.Schema$ParagraphElement;
+type TextRun = docs_v1.Schema$TextRun;
+type Table = docs_v1.Schema$Table;
+type ListsMap = Record<string, docs_v1.Schema$List>;
+
+export interface RenderedMarkdown {
+  markdown: string;
+  image_count: number;
+  /** Checklist items, all rendered `- [ ]` — the API exposes no checked state (#84). */
+  task_count: number;
+}
+
+export function renderBodyAsMarkdown(
+  body: docs_v1.Schema$Body | undefined,
+  lists: ListsMap | undefined,
+  footnotes?: Record<string, docs_v1.Schema$Footnote> | null,
+  inlineObjects?: Record<string, docs_v1.Schema$InlineObject> | null,
+  options: { bodyFontPt?: number } = {},
+): RenderedMarkdown {
+  const ctx: RenderCtx = {
+    bodyFontPt: options.bodyFontPt ?? DEFAULT_BODY_FONT_PT,
+    lists: lists ?? {},
+    imageCount: 0,
+    taskCount: 0,
+    footnotes: footnotes ?? {},
+    cited: [],
+    inlineObjects: inlineObjects ?? {},
+  };
+  if (!body?.content) {
+    return { markdown: "", image_count: 0, task_count: 0 };
+  }
+  const parts: string[] = [];
+  // Consecutive code-line paragraphs form one fenced block.
+  let codeLines: string[] | undefined;
+  const closeCode = () => {
+    if (codeLines) parts.push(`\`\`\`\n${codeLines.join("\n")}\n\`\`\`\n\n`);
+    codeLines = undefined;
+  };
+  let inList = false;
+  let listId = "";
+  for (const [i, element] of body.content.entries()) {
+    // Every body opens with a section break; it is structure, not content.
+    if (i === 0 && element.sectionBreak) continue;
+    if (element.paragraph && isCodeLine(element.paragraph)) {
+      (codeLines ??= []).push(codeLineText(element.paragraph));
+      continue;
+    }
+    closeCode();
+    // An empty paragraph directly above a table is the API's insertion
+    // artifact (or the shrunk one a tab-opening table keeps), not content.
+    if (
+      element.paragraph &&
+      !element.paragraph.bullet &&
+      !(element.paragraph.paragraphStyle?.borderBottom?.width?.magnitude ?? 0) &&
+      !(element.paragraph.elements ?? []).some((pe) => pe.pageBreak) &&
+      body.content[i + 1]?.table &&
+      !(element.paragraph.elements ?? []).some((pe) => (pe.textRun?.content ?? "").trim())
+    ) {
+      continue;
+    }
+    // List items are single lines; whatever follows a list needs a blank line first.
+    const isItem = !!element.paragraph?.bullet;
+    const itemList = element.paragraph?.bullet?.listId ?? "";
+    // …and so does a different list starting right after this one.
+    if (inList && (!isItem || itemList !== listId)) parts.push("\n");
+    inList = isItem;
+    listId = itemList;
+    parts.push(renderStructuralElement(element, ctx));
+  }
+  closeCode();
+  // Footnote definitions, numbered in citation order.
+  for (const [n, id] of ctx.cited.entries()) {
+    const text = (ctx.footnotes[id]?.content ?? [])
+      .map((el) => renderStructuralElement(el, ctx))
+      .join("")
+      .trim();
+    parts.push(`\n[^${n + 1}]: ${text}\n`);
+  }
+  return {
+    markdown: parts
+      .join("")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim(),
+    image_count: ctx.imageCount,
+    task_count: ctx.taskCount,
+  };
+}
+
+interface RenderCtx {
+  lists: ListsMap;
+  imageCount: number;
+  footnotes: Record<string, docs_v1.Schema$Footnote>;
+  /** Footnote ids in order of first citation. */
+  cited: string[];
+  inlineObjects: Record<string, docs_v1.Schema$InlineObject>;
+  taskCount: number;
+  /** The tab's NORMAL_TEXT size: what a `fit` column is measured at. */
+  bodyFontPt: number;
+}
+
+const MONO = /mono|consolas|courier|code/i;
+
+function isMono(run: TextRun | undefined): boolean {
+  return MONO.test(run?.textStyle?.weightedFontFamily?.fontFamily ?? "");
+}
+
+/**
+ * A code line: a body paragraph whose every run with visible text is
+ * monospace. The writer styles whole lines this way; so does Google's importer.
+ */
+function isCodeLine(para: Paragraph): boolean {
+  if (para.bullet || headingLevelFor(para.paragraphStyle?.namedStyleType ?? "") > 0) return false;
+  const runs = (para.elements ?? []).map((e) => e.textRun).filter((r): r is TextRun => !!r);
+  const visible = runs.filter((r) => (r.content ?? "").trim().length > 0);
+  return visible.length > 0 && visible.every(isMono);
+}
+
+function codeLineText(para: Paragraph): string {
+  return (para.elements ?? [])
+    .map((e) => e.textRun?.content ?? "")
+    .join("")
+    .replace(/\n$/, "");
+}
+
+function renderStructuralElement(el: StructuralElement, ctx: RenderCtx): string {
+  if (el.paragraph) return renderParagraph(el.paragraph, ctx);
+  if (el.table) return renderTable(el.table, ctx);
+  if (el.sectionBreak) return "\n---\n\n";
+  if (el.tableOfContents) {
+    // Docs includes TOC as a nested body; we just note its presence rather
+    // than recurse — TOCs are noisy and not what agents usually want.
+    return "_[table of contents]_\n\n";
+  }
+  return "";
+}
+
+function renderParagraph(para: Paragraph, ctx: RenderCtx): string {
+  // A page break is the writer's double rule, after whatever text shares its
+  // paragraph (specs/behaviors/markdown-to-doc.md § Page breaks).
+  if ((para.elements ?? []).some((pe) => pe.pageBreak)) {
+    const rest = { ...para, elements: (para.elements ?? []).filter((pe) => !pe.pageBreak) };
+    const hasText = (rest.elements ?? []).some((pe) => (pe.textRun?.content ?? "").trim());
+    return `${hasText ? renderParagraph(rest, ctx) : ""}\n---\n\n---\n\n`;
+  }
+  const inline = (para.elements ?? []).map((pe) => renderParagraphElement(pe, ctx)).join("");
+  const text = inline.replace(/\n+$/, "");
+
+  const style = para.paragraphStyle?.namedStyleType ?? "NORMAL_TEXT";
+  const headingLevel = headingLevelFor(style);
+  if (headingLevel > 0) {
+    if (!text.trim()) return "";
+    return `${"#".repeat(headingLevel)} ${text.trim()}\n\n`;
+  }
+
+  if (para.bullet) {
+    const level = para.bullet.nestingLevel ?? 0;
+    const marker = bulletMarker(para.bullet.listId ?? "", level, ctx.lists);
+    if (marker === "- [ ]") ctx.taskCount += 1;
+    const indent = "  ".repeat(level);
+    return `${indent}${marker} ${text.trim()}\n`;
+  }
+
+  const ps = para.paragraphStyle;
+  if (!text.trim()) {
+    // An empty paragraph ruled underneath is the writer's horizontal rule.
+    if ((ps?.borderBottom?.width?.magnitude ?? 0) > 0) return "\n---\n\n";
+    return "\n";
+  }
+  // Indented at both edges, not a list item: a blockquote (the shape
+  // Google's importer and md-to-doc both produce).
+  if ((ps?.indentStart?.magnitude ?? 0) > 0 && (ps?.indentEnd?.magnitude ?? 0) > 0) {
+    return `${text
+      .trim()
+      .split("\n")
+      .map((line) => `> ${line}`)
+      .join("\n")}\n\n`;
+  }
+  return `${text.trim()}\n\n`;
+}
+
+function renderParagraphElement(pe: ParagraphElement, ctx: RenderCtx): string {
+  if (pe.textRun) return renderTextRun(pe.textRun);
+  if (pe.horizontalRule) return "\n---\n";
+  if (pe.inlineObjectElement) {
+    ctx.imageCount += 1;
+    // The image's alt text (Docs' "description", or its title) when it has one.
+    const id = pe.inlineObjectElement.inlineObjectId ?? "";
+    const embedded = ctx.inlineObjects[id]?.inlineObjectProperties?.embeddedObject;
+    const alt = (embedded?.description || embedded?.title || "").replace(/[[\]\n]/g, " ").trim();
+    return alt ? `[image: ${alt}]` : "[image]";
+  }
+  if (pe.pageBreak) return "\n\n";
+  if (pe.columnBreak) return "\n";
+  if (pe.footnoteReference) {
+    const id = pe.footnoteReference.footnoteId ?? "";
+    let n = ctx.cited.indexOf(id);
+    if (n < 0) n = ctx.cited.push(id) - 1;
+    return `[^${n + 1}]`;
+  }
+  if (pe.equation) return "_[equation]_";
+  if (pe.autoText) return pe.autoText.textStyle?.link?.url ?? "";
+  if (pe.person) return pe.person.personProperties?.name ?? "";
+  if (pe.richLink) {
+    const title = pe.richLink.richLinkProperties?.title ?? "link";
+    const uri = pe.richLink.richLinkProperties?.uri ?? "";
+    return uri ? `[${title}](${uri})` : title;
+  }
+  return "";
+}
+
+function renderTextRun(run: TextRun): string {
+  let text = run.content ?? "";
+  if (!text) return "";
+  // Preserve a trailing newline separately so surrounding markers don't
+  // swallow it (e.g., `**bold\n**` renders wrong). Inline styling wraps
+  // just the content portion.
+  let trailing = "";
+  const nlMatch = /(\n+)$/.exec(text);
+  if (nlMatch) {
+    trailing = nlMatch[1];
+    text = text.slice(0, -trailing.length);
+  }
+  if (!text) return trailing;
+  // Docs stores a hard line break as a vertical tab.
+  text = text.split("\u000b").join("  \n");
+
+  const style = run.textStyle;
+  if (style) {
+    if (style.bold && style.italic) text = `***${text}***`;
+    else if (style.bold) text = `**${text}**`;
+    else if (style.italic) text = `*${text}*`;
+
+    // Inline code: we use `code` when textStyle has a monospace font family
+    // set (the closest signal Docs gives for inline code).
+    const fam = style.weightedFontFamily?.fontFamily;
+    if (fam && /mono|consolas|courier|code/i.test(fam) && !style.bold && !style.italic) {
+      text = `\`${text}\``;
+    }
+
+    if (style.strikethrough) text = `~~${text}~~`;
+    if (style.underline && !style.link) text = `<u>${text}</u>`;
+    if (style.link?.url) text = `[${text}](${style.link.url})`;
+  }
+
+  return text + trailing;
+}
+
+/** Where a grid position sits in a merge: the head cell covering it (itself, when it isn't covered). */
+export interface GridSlot {
+  headRow: number;
+  headCol: number;
+  rowSpan: number;
+  colSpan: number;
+}
+
+/**
+ * The table's merges as a grid. Docs keeps a merge's covered cells in the
+ * table as ordinary-looking empty cells; only the head carries `rowSpan` /
+ * `columnSpan` (specs/behaviors/markdown-to-doc.md § Merged cells), so
+ * coverage is worked out from the heads.
+ */
+export function tableGrid(table: Table): GridSlot[][] {
+  const rows = table.tableRows ?? [];
+  const grid: GridSlot[][] = rows.map(() => []);
+  rows.forEach((row, r) =>
+    (row.tableCells ?? []).forEach((cell, c) => {
+      if (grid[r][c]) return; // covered by an earlier head
+      const rowSpan = Math.max(1, cell.tableCellStyle?.rowSpan ?? 1);
+      const colSpan = Math.max(1, cell.tableCellStyle?.columnSpan ?? 1);
+      const slot = { headRow: r, headCol: c, rowSpan, colSpan };
+      for (let rr = r; rr < Math.min(rows.length, r + rowSpan); rr++) {
+        for (let cc = c; cc < c + colSpan; cc++) grid[rr][cc] = slot;
+      }
+    }),
+  );
+  return grid;
+}
+
+function renderTable(table: Table, ctx: RenderCtx): string {
+  const rows = table.tableRows ?? [];
+  if (rows.length === 0) return "";
+  const cellText = (cell: docs_v1.Schema$TableCell): string => renderCell(cell, ctx);
+  // A header row is bold by construction (GFM renders it so); emitting the
+  // markers would double it on the way back in.
+  const headerText = (cell: docs_v1.Schema$TableCell): string =>
+    cellText(cell).replace(/^\*\*(.+)\*\*$/, "$1");
+  const grid = tableGrid(table);
+
+  // The header: the rows Docs marks as such (at least one, as GFM needs),
+  // grown to the bottom of any row span that starts in it — a body `^` can't
+  // continue a header cell.
+  let headerRows = 0;
+  while (headerRows < rows.length && rows[headerRows].tableRowStyle?.tableHeader) headerRows++;
+  headerRows = Math.max(1, headerRows);
+  for (let r = 0; r < headerRows; r++) {
+    for (const slot of grid[r]) {
+      if (slot) headerRows = Math.max(headerRows, slot.headRow + slot.rowSpan);
+    }
+  }
+  headerRows = Math.min(headerRows, rows.length);
+  const columns = Math.max(1, ...grid.map((g) => g.length));
+
+  const lines: string[] = [];
+  for (let r = 0; r < rows.length; r++) {
+    const cells = rows[r].tableCells ?? [];
+    let line = "|";
+    for (let c = 0; c < cells.length; ) {
+      const slot = grid[r][c] ?? { headRow: r, headCol: c, rowSpan: 1, colSpan: 1 };
+      const pipes = "|".repeat(slot.colSpan);
+      if (slot.headRow === r && slot.headCol === c) {
+        line += ` ${(r < headerRows ? headerText : cellText)(cells[c])} ${pipes}`;
+      } else if (slot.headCol === c) {
+        line += ` ^${pipes}`; // continues the cell above
+      }
+      c = slot.headCol === c ? c + slot.colSpan : c + 1;
+    }
+    lines.push(line);
+    if (r === headerRows - 1) {
+      lines.push(`| ${Array.from({ length: columns }, () => "---").join(" | ")} |`);
+    }
+  }
+  const hint = colsHint(table.tableStyle?.tableColumnProperties ?? [], lines, ctx.bodyFontPt);
+  if (hint) lines.unshift(hint);
+  return `\n${lines.join("\n")}\n\n`;
+}
+
+/**
+ * The writer's width hint, read back. A fixed column still as wide as `fit`
+ * makes it for its current content is `fit` (specs/behaviors/markdown-to-doc.md
+ * § Fitted columns): the table's own Markdown is parsed again so the cells
+ * measured are exactly the ones a re-write would measure. The other columns
+ * become `1` each when equal, else whole percentages of their sum (the last
+ * takes the rounding remainder). Evenly distributed or equal columns with no
+ * fit need no line.
+ */
+function colsHint(
+  columns: docs_v1.Schema$TableColumnProperties[],
+  tableLines: string[],
+  bodyFontPt: number,
+): string | undefined {
+  if (columns.length === 0) return undefined;
+  const widths = columns.map((c) =>
+    c.widthType === "FIXED_WIDTH" ? (c.width?.magnitude ?? 0) : 0,
+  );
+  if (widths.some((w) => w <= 0)) return undefined;
+  const block = reparseTable(tableLines);
+  const fit = widths.map(
+    (w, c) => !!block && Math.abs(w - fitWidth(block, c, bodyFontPt)) <= FIT_TOLERANCE_PT,
+  );
+  const rest = widths.filter((_, c) => !fit[c]);
+  const restEqual = rest.every((w) => w === rest[0]);
+  if (!fit.some(Boolean) && (columns.length < 2 || restEqual)) return undefined;
+  const total = rest.reduce((a, b) => a + b, 0);
+  const pct = rest.map((w) => Math.round((w / total) * 100));
+  if (pct.length) pct[pct.length - 1] += 100 - pct.reduce((a, b) => a + b, 0);
+  let i = 0;
+  const specs = widths.map((_, c) => {
+    if (fit[c]) return "fit";
+    const p = pct[i++];
+    return fit.some(Boolean) && restEqual ? "1" : `${p}%`;
+  });
+  return `<!-- cols: ${specs.join(" ")} -->`;
+}
+
+/** The writer rounds a fit up to a whole point; anything within a point is the same fit. */
+const FIT_TOLERANCE_PT = 1;
+
+/** The rendered table, parsed the way `docs write` would parse it; undefined if it can't be. */
+function reparseTable(tableLines: string[]): TableBlock | undefined {
+  try {
+    const block = parseMarkdown(tableLines.join("\n")).blocks[0];
+    return block?.kind === "table" ? block : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * One cell as Markdown: one line per cell paragraph, joined with `<br>`
+ * (GFM's multi-line cell); a hard break inside a paragraph is `<br>` too, and
+ * a bulleted paragraph carries its marker — the inverse of the writer's cells.
+ */
+function renderCell(cell: docs_v1.Schema$TableCell, ctx: RenderCtx): string {
+  const lines: string[] = [];
+  for (const el of cell.content ?? []) {
+    if (!el.paragraph) continue;
+    const text = (el.paragraph.elements ?? [])
+      .map((pe) => renderParagraphElement(pe, ctx))
+      .join("")
+      .replace(/\n+$/, "")
+      .replace(/ {2}\n/g, "<br>")
+      .replace(/\n/g, " ")
+      // `|` ends a cell and `||` spans columns, so a literal pipe is escaped.
+      .replace(/\|/g, "\\|")
+      .trim();
+    const bullet = el.paragraph.bullet;
+    if (bullet) {
+      const marker = bulletMarker(bullet.listId ?? "", bullet.nestingLevel ?? 0, ctx.lists);
+      if (marker === "- [ ]") ctx.taskCount += 1;
+      lines.push(`${marker} ${text}`);
+    } else {
+      lines.push(text);
+    }
+  }
+  // A caret ending a cell continues the cell above; a literal one is escaped.
+  return lines
+    .join("<br>")
+    .trim()
+    .replace(/(?<!\\)\^$/, "\\^");
+}
+
+/** A cell's Markdown on its own, the way `docs read` renders it inside a table (`docs edit-cell`). */
+export function renderCellMarkdown(
+  cell: docs_v1.Schema$TableCell,
+  lists: ListsMap | undefined,
+): string {
+  return renderCell(cell, {
+    lists: lists ?? {},
+    imageCount: 0,
+    taskCount: 0,
+    footnotes: {},
+    cited: [],
+    inlineObjects: {},
+    bodyFontPt: DEFAULT_BODY_FONT_PT,
+  });
+}
+
+function headingLevelFor(namedStyleType: string): number {
+  if (namedStyleType === "TITLE") return 1;
+  if (namedStyleType === "SUBTITLE") return 2;
+  const m = /^HEADING_([1-6])$/.exec(namedStyleType);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+function bulletMarker(listId: string, level: number, lists: ListsMap): string {
+  const list = lists[listId];
+  const levelProps = list?.listProperties?.nestingLevels?.[level];
+  // Ordered list: Docs sets a glyphType like "DECIMAL", "UPPER_ROMAN" etc.
+  // Unordered list: Docs sets a glyphSymbol (e.g. "●", "○", "■"). We don't
+  // round-trip the exact ordinal here — just emit `1.` and let markdown
+  // renderers re-number, which is the GFM convention.
+  if (levelProps?.glyphType && levelProps.glyphType !== "GLYPH_TYPE_UNSPECIFIED") {
+    return "1.";
+  }
+  // A checkbox list has no glyph symbol and an unspecified glyph type (the
+  // API exposes no checked state, so every item reads as open).
+  if (levelProps && levelProps.glyphType === "GLYPH_TYPE_UNSPECIFIED" && !levelProps.glyphSymbol) {
+    return "- [ ]";
+  }
+  return "-";
+}

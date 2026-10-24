@@ -1,0 +1,195 @@
+import { checkFlags, type FlagSpec } from "../util/flags.js";
+import { AxiError } from "axi-sdk-js";
+import { resolveAccount, withAccountSource } from "../google/account.js";
+import { notImplemented, renderAlternatives, withInstead } from "./stub-signposts.js";
+import { docsCommentsCommand } from "./docs/comments.js";
+import { GET_HELP, slidesGetCommand } from "./slides/get.js";
+import { PAGE_HELP, slidesPageCommand } from "./slides/page.js";
+import { SUMMARIZE_HELP, slidesSummarizeCommand } from "./slides/summarize.js";
+import { SKIP_HELP, UNSKIP_HELP, slidesSkipCommand, slidesUnskipCommand } from "./slides/skip.js";
+
+// Slides comments are Drive comments — the same file-agnostic API `docs
+// comments` / `sheets comments` use. Alias the shared handler with a
+// presentation-worded resource label + not-found code.
+const COMMENTS_HELP = `usage: gws-axi slides comments <presentation-id> [--include-resolved] [flags]
+args[1]:
+  <presentation-id>    The Slides presentation ID (the portion of the URL after /d/)
+flags[4]:
+  --include-resolved   Include resolved comment threads (hidden by default)
+  --full               Don't truncate comment/reply bodies (default cap: 500 chars)
+  --limit <n>          Max comments to return (default: 50)
+  --account <email>    Account override when 2+ are configured
+examples:
+  gws-axi slides comments 1AbC...
+output:
+  A \`comments[N]{id,author,created,resolved,quoted_content,body,reply_count}\`
+  table plus a \`replies[N]{comment,author,created,body}\` block.
+notes:
+  Slides comments are Drive comments (file-type-agnostic); this is the same
+  data as \`gws-axi docs comments\` / \`gws-axi sheets comments\`.
+`;
+
+const slidesCommentsCommand = (account: string, args: string[]): Promise<string> =>
+  docsCommentsCommand(account, args, {
+    resource: "presentation",
+    notFoundCode: "PRESENTATION_NOT_FOUND",
+  });
+
+interface SlidesSubcommand {
+  /** Flags this subcommand takes — or "self" when its own parser validates them. */
+  flags?: FlagSpec | "self";
+  name: string;
+  mutation: boolean;
+  help: string;
+  handler?: (account: string, args: string[]) => Promise<string>;
+  instead?: string[];
+}
+
+const CREATE_HELP = `usage: gws-axi slides create --title <text> [--from <template-id>] [flags]
+status: planned for v1 writes — not yet implemented
+`;
+const UPDATE_HELP = `usage: gws-axi slides update <presentation-id> --requests <json-file> [flags]
+status: planned for v1 writes — not yet implemented
+notes:
+  Will wrap batchUpdate. Until implemented, programmatic edits require
+  the raw Slides API or the Drive copy/edit flow.
+`;
+
+export const SUBCOMMANDS: SlidesSubcommand[] = [
+  {
+    name: "get",
+    mutation: false,
+    flags: { value: [], boolean: [] },
+    help: GET_HELP,
+    handler: slidesGetCommand,
+  },
+  {
+    name: "page",
+    mutation: false,
+    flags: { value: [], boolean: [] },
+    help: PAGE_HELP,
+    handler: slidesPageCommand,
+  },
+  {
+    name: "summarize",
+    mutation: false,
+    flags: { value: ["--out"], boolean: ["--full"] },
+    help: SUMMARIZE_HELP,
+    handler: slidesSummarizeCommand,
+  },
+  {
+    name: "comments",
+    mutation: false,
+    flags: { value: ["--limit"], boolean: ["--include-resolved", "--full"] },
+    help: COMMENTS_HELP,
+    handler: slidesCommentsCommand,
+  },
+  { name: "skip", mutation: true, flags: "self", help: SKIP_HELP, handler: slidesSkipCommand },
+  {
+    name: "unskip",
+    mutation: true,
+    flags: "self",
+    help: UNSKIP_HELP,
+    handler: slidesUnskipCommand,
+  },
+  {
+    name: "create",
+    mutation: true,
+    help: CREATE_HELP,
+    instead: [
+      'gws-axi drive upload <deck.pptx> --convert --name "<title>" --account <email> — creates a new native Presentation and returns its id',
+    ],
+  },
+  {
+    name: "update",
+    mutation: true,
+    help: UPDATE_HELP,
+    instead: [
+      "gws-axi drive upload <deck.pptx> --update <presentationId> --convert --account <email> — replaces the ENTIRE deck as a new revision; NOT a per-slide or per-element edit",
+      "gws-axi slides summarize <presentationId> — read the current deck first; there is no export-to-pptx round trip",
+    ],
+  },
+];
+
+const SUB_BY_NAME: Record<string, SlidesSubcommand> = Object.fromEntries(
+  SUBCOMMANDS.map((s) => [s.name, s]),
+);
+
+function parseAccountFlag(args: string[]): {
+  account: string | undefined;
+  rest: string[];
+} {
+  const rest: string[] = [];
+  let account: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--account" && args[i + 1]) {
+      account = args[i + 1];
+      i++;
+      continue;
+    }
+    rest.push(arg);
+  }
+  return { account, rest };
+}
+
+const reads = SUBCOMMANDS.filter((s) => !s.mutation).map((s) => s.name);
+const writes = SUBCOMMANDS.filter((s) => s.mutation).map((s) => s.name);
+
+export const SLIDES_HELP = `usage: gws-axi slides <subcommand> [args] [--account <email>] [flags]
+reads[${reads.length}]:
+  ${reads.join(", ")}
+writes[${writes.length}]:
+  ${writes.join(", ")}
+notes:
+  Writes require --account <email> when 2+ accounts are authenticated.
+  Reads use the default account when --account is not provided.
+  skip and unskip are live (hide/show slides in presentation mode); create and
+  update are scaffolded and throw NOT_IMPLEMENTED after account resolution runs.
+${renderAlternatives(SUBCOMMANDS)}subcommand help:
+  gws-axi slides get --help        for metadata + slide list
+  gws-axi slides page --help       for a single slide's content
+  gws-axi slides summarize --help  for the whole deck as markdown
+  gws-axi slides comments --help   for review comments (Drive comments)
+  gws-axi slides skip --help       for hiding slides in presentation mode (unskip too)
+examples:
+  gws-axi slides get 1AbC...
+  gws-axi slides summarize 1AbC...
+  gws-axi slides page 1AbC... gd87cbcb3a4_0_42
+  gws-axi slides comments 1AbC...
+  gws-axi slides skip 1AbC... gd87cbcb3a4_0_42 --account you@example.com
+`;
+
+export async function slidesCommand(args: string[]): Promise<string> {
+  if (args.length === 0 || (args.length === 1 && args[0] === "--help")) {
+    return SLIDES_HELP;
+  }
+
+  const sub = args[0];
+  const def = SUB_BY_NAME[sub];
+  if (!def) {
+    throw new AxiError(`Unknown slides subcommand: ${sub}`, "VALIDATION_ERROR", [
+      `Run \`gws-axi slides --help\` to see available subcommands`,
+    ]);
+  }
+
+  const rest = args.slice(1);
+  if (rest.includes("--help")) {
+    return def.handler ? def.help : withInstead(def.help, def.instead);
+  }
+
+  const { account: accountFlag, rest: remaining } = parseAccountFlag(rest);
+  if (def.handler && def.flags && def.flags !== "self") {
+    checkFlags(remaining, def.flags, `slides ${sub}`);
+  }
+  const resolution = resolveAccount(accountFlag, {
+    mutation: def.mutation,
+    commandName: `slides ${sub}`,
+  });
+
+  if (!def.handler) {
+    throw notImplemented("slides", sub, resolution.account, def.instead);
+  }
+
+  return withAccountSource(resolution, await def.handler(resolution.account, remaining));
+}

@@ -1,0 +1,78 @@
+{
+  "name": "gws-axi",
+  "version": "0.1.0",
+  "description": "AXI-compliant Google Workspace CLI — token-efficient TOON output, agent-guided auth setup, unified interface for Gmail, Calendar, Docs, Drive, Slides",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JarvusInnovations/gws-axi.git"
+  },
+  "keywords": [
+    "google",
+    "google-workspace",
+    "gmail",
+    "calendar",
+    "docs",
+    "drive",
+    "slides",
+    "cli",
+    "agent",
+    "axi",
+    "toon"
+  ],
+  "bin": {
+    "gws-axi": "dist/bin/gws-axi.js"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc && chmod +x dist/bin/gws-axi.js",
+    "dev": "bun bin/gws-axi.ts",
+    "lint": "oxlint src bin",
+    "format": "oxfmt src bin",
+    "format:check": "oxfmt --check src bin",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "prepublishOnly": "bun run build"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@toon-format/toon": "^2.1.0",
+    "addressparser": "^1.0.1",
+    "axi-sdk-js": "^0.1.4",
+    "diff": "^9.0.0",
+    "google-auth-library": "^10.7.0",
+    "googleapis": "^182.0.0",
+    "marked": "^18.0.9",
+    "turndown": "^7.2.4",
+    "yaml": "^2.9.1"
+  },
+  "overrides": {
+    "google-auth-library": "$google-auth-library"
+  },
+  "devDependencies": {
+    "@types/addressparser": "^1.0.3",
+    "@types/diff": "^8.0.0",
+    "@types/node": "^25.6.0",
+    "@types/turndown": "^5.0.6",
+    "oxfmt": "^0.56.0",
+    "oxlint": "^1.71.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.4"
+  },
+  "author": "Jarvus Innovations <hello@jarv.us>",
+  "homepage": "https://github.com/JarvusInnovations/gws-axi#readme",
+  "bugs": {
+    "url": "https://github.com/JarvusInnovations/gws-axi/issues"
+  }
+}
