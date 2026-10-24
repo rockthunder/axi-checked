@@ -25,6 +25,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { execFileSync, execSync } from "node:child_process";
+import { createRequire } from "node:module";
 import {
   createServer,
   type IncomingMessage,
@@ -684,8 +685,21 @@ export const KEYCHAIN_ISOLATION_CHROME_ARGS = [
   "--password-store=basic",
 ] as const;
 
+/** The only chrome-devtools-mcp release this build is vetted for (see package.json). */
+export const PINNED_MCP_VERSION = "1.11.0";
+
+/**
+ * Switches that keep the MCP server from phoning Google: usage statistics
+ * (Clearcut) and CrUX field-data lookups (which send page URLs to Google's CrUX
+ * API). Always on in this build; the update check is disabled via the child env.
+ */
+export const MCP_PRIVACY_ARGS = [
+  "--no-usage-statistics",
+  "--no-performance-crux",
+] as const;
+
 export function buildTransportArgs(): string[] {
-  const args = ["-y", "chrome-devtools-mcp@latest"];
+  const args = ["-y", `chrome-devtools-mcp@${PINNED_MCP_VERSION}`, ...MCP_PRIVACY_ARGS];
 
   const autoConnect = process.env.CHROME_DEVTOOLS_AXI_AUTO_CONNECT === "1";
   const browserUrl = process.env.CHROME_DEVTOOLS_AXI_BROWSER_URL;
@@ -793,6 +807,8 @@ export interface McpPathProbe {
    * never touches the host's real `PATH`.
    */
   findOnPath?: (name: string) => string | null;
+  /** Resolve the vetted chrome-devtools-mcp entrypoint bundled as a dependency. */
+  resolveBundled?: () => string | null;
 }
 /**
  * The command and arguments for a stdio-launched chrome-devtools-mcp process.
@@ -840,7 +856,19 @@ const DEFAULT_MCP_PATH_PROBE: McpPathProbe = {
     }
   },
   findOnPath: (name) => findExecutableOnPath(name),
+  resolveBundled: () => resolveBundledMcpPath(),
 };
+
+function resolveBundledMcpPath(): string | null {
+  try {
+    const pkg = createRequire(import.meta.url).resolve(
+      "chrome-devtools-mcp/package.json",
+    );
+    return join(dirname(pkg), "build", "src", "bin", "chrome-devtools-mcp.js");
+  } catch {
+    return null;
+  }
+}
 
 function findExecutableOnPath(name: string): string | null {
   const path = process.env.PATH;
@@ -954,22 +982,18 @@ export function resolveTransportSpec(
   }
 
   const mcpArgs = buildTransportArgs();
-  if (!explicitPath) {
-    const pathBinary = probe.findOnPath?.("chrome-devtools-mcp");
-    if (pathBinary) {
-      return { command: pathBinary, args: mcpArgs.slice(2) };
-    }
-  }
-  const mcpPath = explicitPath || detectGlobalMcpPath(probe);
+  // Corporate build: run the pinned chrome-devtools-mcp that ships in this package's
+  // dependencies. No PATH lookup, no global-npm probe, no `npx` download at runtime.
+  const mcpPath = explicitPath || probe.resolveBundled?.() || null;
   if (mcpPath) {
-    // Strip the npx prefix `["-y", "chrome-devtools-mcp@latest"]` — direct
-    // node spawn doesn't need it.
     return {
       command: process.execPath,
       args: [mcpPath, ...mcpArgs.slice(2)],
     };
   }
-  return { command: "npx", args: mcpArgs };
+  throw new Error(
+    `Bundled chrome-devtools-mcp@${PINNED_MCP_VERSION} was not found. Run \`pnpm install\` in the vetted repo, or set CHROME_DEVTOOLS_AXI_MCP_PATH to a vetted build.`,
+  );
 }
 
 function parseSharedServerUrl(value: string): URL {
@@ -1012,10 +1036,11 @@ export function buildMcpChildEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): Record<string, string> {
   const childEnv = getDefaultEnvironment();
-  for (const key of ["CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS", "CI"]) {
-    const value = env[key];
-    if (value !== undefined) childEnv[key] = value;
-  }
+  const ci = env["CI"];
+  if (ci !== undefined) childEnv["CI"] = ci;
+  // Forced on regardless of the caller's environment (corporate build).
+  childEnv["CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS"] = "1";
+  childEnv["CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS"] = "1";
   return childEnv;
 }
 

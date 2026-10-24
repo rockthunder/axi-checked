@@ -436,7 +436,7 @@ export function buildBridgeEarlyExitError(
   }
 
   const suggestions = [
-    "Check that chrome-devtools-mcp can start: npx chrome-devtools-mcp@latest --help",
+    "Check that the bundled chrome-devtools-mcp can start: run `pnpm install` in the vetted repo",
   ];
   if (process.env.CHROME_DEVTOOLS_AXI_MCP_PATH?.trim()) {
     suggestions.push(
@@ -444,8 +444,7 @@ export function buildBridgeEarlyExitError(
     );
   } else {
     suggestions.push(
-      "`npx -y chrome-devtools-mcp@latest` may have failed to resolve/download the package (offline, or a slow cold first run); install it globally and set:",
-      '  export CHROME_DEVTOOLS_AXI_MCP_PATH="$(npm prefix -g)/lib/node_modules/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js"',
+      "The bundled chrome-devtools-mcp may be missing; run `pnpm install` in the vetted repo (this build never downloads it at runtime)",
     );
   }
   suggestions.push(
@@ -588,14 +587,8 @@ export async function ensureBridge(
       : sharedMcpMode === "proxy"
         ? sharedMcpSuggestions("proxy")
         : [
-            "Check that chrome-devtools-mcp is installed: npx chrome-devtools-mcp@latest --help",
+            "Check that the bundled chrome-devtools-mcp is installed: run `pnpm install` in the vetted repo",
           ];
-  if (!sharedMcpMode && !process.env.CHROME_DEVTOOLS_AXI_MCP_PATH?.trim()) {
-    suggestions.push(
-      "If `npx -y chrome-devtools-mcp@latest` is slow on this machine, install mcp globally and set:",
-      '  export CHROME_DEVTOOLS_AXI_MCP_PATH="$(npm prefix -g)/lib/node_modules/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js"',
-    );
-  }
   suggestions.push(
     "Or extend the deadline: export CHROME_DEVTOOLS_AXI_BRIDGE_TIMEOUT_MS=60000",
   );
