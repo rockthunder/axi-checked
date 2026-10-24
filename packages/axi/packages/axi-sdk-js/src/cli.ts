@@ -7,7 +7,6 @@ import {
   type AxiRenderable,
   type AxiStructuredOutput,
 } from "./output.js";
-import { runUpdate } from "./update.js";
 
 /**
  * Command names reserved by the SDK as built-ins. A tool may shadow one by
@@ -214,26 +213,16 @@ async function runHandler<TContext>(
 }
 
 async function runBuiltinUpdate<TContext>(
-  args: string[],
+  _args: string[],
   stdout: { write: (chunk: string) => unknown },
   options: AxiCliOptions<TContext>,
 ): Promise<void> {
-  if (args.length === 1 && args[0] === "--help") {
-    stdout.write(builtinUpdateHelp());
-    return;
-  }
-
-  try {
-    const output = await runUpdate({
-      args,
-      stdout,
-      packageName: options.packageName,
-      version: options.version,
-    });
-    stdout.write(`${renderOutput(output)}\n`);
-  } catch (error) {
-    writeFormattedError(error, stdout, options);
-  }
+  // Corporate build: never contact the public npm registry or run a package manager.
+  writeFormattedError(
+    new AxiError(UPDATE_DISABLED_MESSAGE, "VALIDATION_ERROR"),
+    stdout,
+    options,
+  );
 }
 
 function writeFormattedError<TContext>(
@@ -251,26 +240,11 @@ function resolveBinName(): string {
 }
 
 function builtinCommandsHelp(): string {
-  const bin = resolveBinName();
-  return `${renderOutput({
-    "built-in": {
-      update: `Upgrade \`${bin}\` to the latest published version`,
-      "update --check": "Report current vs latest without installing",
-    },
-  })}\n`;
+  return "";
 }
 
-function builtinUpdateHelp(): string {
-  const bin = resolveBinName();
-  return `${renderOutput({
-    command: "update",
-    description: `Upgrade \`${bin}\` to the latest published npm version`,
-    flags: {
-      "--check": "Report current vs latest and exit without installing",
-    },
-    examples: [`${bin} update`, `${bin} update --check`],
-  })}\n`;
-}
+const UPDATE_DISABLED_MESSAGE =
+  "Self-update is disabled in this build; updates are distributed through your organisation's internal repository";
 
 function renderLeadingFlagError(flag: string): string {
   const bin = basename(process.argv[1] ?? "tool") || "tool";
