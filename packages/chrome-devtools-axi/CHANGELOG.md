@@ -1,0 +1,351 @@
+# Changelog
+
+## [0.1.44](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.43...chrome-devtools-axi-v0.1.44) (2026-10-16)
+
+
+### Bug Fixes
+
+* **bridge:** honor chrome-devtools-mcp usage-statistics opt-out ([#182](https://github.com/kunchenguid/chrome-devtools-axi/issues/182)) ([30d5e29](https://github.com/kunchenguid/chrome-devtools-axi/commit/30d5e29c41bc2df7f1d4385d8d24a1aa2a749658))
+* **cli:** resolve relative upload paths from the caller's cwd ([#183](https://github.com/kunchenguid/chrome-devtools-axi/issues/183)) ([dcce27e](https://github.com/kunchenguid/chrome-devtools-axi/commit/dcce27eb6a9add08262bb371a297abc197a1602d))
+
+## [0.1.43](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.42...chrome-devtools-axi-v0.1.43) (2026-10-15)
+
+
+### Features
+
+* **cli:** allow metadata-only navigation output ([#179](https://github.com/kunchenguid/chrome-devtools-axi/issues/179)) ([73d1020](https://github.com/kunchenguid/chrome-devtools-axi/commit/73d1020d09588e3e29dd1f1323f56f6150960caf))
+
+## [0.1.42](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.41...chrome-devtools-axi-v0.1.42) (2026-10-13)
+
+
+### Bug Fixes
+
+* **cli:** split long duration waits so they outlast the MCP request timeout ([#174](https://github.com/kunchenguid/chrome-devtools-axi/issues/174)) ([ba2c876](https://github.com/kunchenguid/chrome-devtools-axi/commit/ba2c876d0947c2a91d5aba68f00d66f884e1e879))
+
+## [0.1.41](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.40...chrome-devtools-axi-v0.1.41) (2026-10-12)
+
+
+### Bug Fixes
+
+* **cli:** make resize report the viewport the page actually has ([#172](https://github.com/kunchenguid/chrome-devtools-axi/issues/172)) ([c0bc93e](https://github.com/kunchenguid/chrome-devtools-axi/commit/c0bc93eb3ea20636c15a215127eeb7a252b7597d))
+* **cli:** select the tab new_page created, not the one matching its URL ([#171](https://github.com/kunchenguid/chrome-devtools-axi/issues/171)) ([9e362df](https://github.com/kunchenguid/chrome-devtools-axi/commit/9e362dfd05dceccdae8356eb8982770f271608ed))
+
+## [0.1.40](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.39...chrome-devtools-axi-v0.1.40) (2026-10-10)
+
+
+### Features
+
+* **bridge:** add CHROME_DEVTOOLS_AXI_EXECUTABLE_PATH to launch a custom Chrome binary ([#167](https://github.com/kunchenguid/chrome-devtools-axi/issues/167)) ([13260d5](https://github.com/kunchenguid/chrome-devtools-axi/commit/13260d584841bf167a9ed84121b0ec225a44b69c))
+
+## [0.1.39](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.38...chrome-devtools-axi-v0.1.39) (2026-10-04)
+
+
+### Bug Fixes
+
+* prefer MCP executables on PATH before npm fallbacks ([#164](https://github.com/kunchenguid/chrome-devtools-axi/issues/164)) ([c8c6e1b](https://github.com/kunchenguid/chrome-devtools-axi/commit/c8c6e1b82a4afe272a1dcac4b0870add8a45268d))
+
+## [0.1.38](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.37...chrome-devtools-axi-v0.1.38) (2026-10-02)
+
+
+### Bug Fixes
+
+* **cli:** report screenshots saved after emulate ([#162](https://github.com/kunchenguid/chrome-devtools-axi/issues/162)) ([0e464eb](https://github.com/kunchenguid/chrome-devtools-axi/commit/0e464eb6c1b9f8a621ad9cb86a6a30943b94ef41))
+
+## [0.1.37](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.36...chrome-devtools-axi-v0.1.37) (2026-10-01)
+
+
+### Features
+
+* **bridge:** add opt-in idle timeout and exit when the MCP server ends ([#160](https://github.com/kunchenguid/chrome-devtools-axi/issues/160)) ([77a044b](https://github.com/kunchenguid/chrome-devtools-axi/commit/77a044ba9908765a1e796d41567e0cd64ed81339))
+
+## [0.1.36](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.35...chrome-devtools-axi-v0.1.36) (2026-09-29)
+
+
+### Bug Fixes
+
+* restore single-file uploads ([#152](https://github.com/kunchenguid/chrome-devtools-axi/issues/152)) ([069a753](https://github.com/kunchenguid/chrome-devtools-axi/commit/069a753515c131d7be61a57d21854eeffb9fed27))
+
+## [0.1.35](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.34...chrome-devtools-axi-v0.1.35) (2026-09-21)
+
+
+### Features
+
+* **bridge:** add shared MCP server transport modes ([#139](https://github.com/kunchenguid/chrome-devtools-axi/issues/139)) ([a970109](https://github.com/kunchenguid/chrome-devtools-axi/commit/a970109ced6a91e13f817581a7f05f07ad57f22d))
+
+
+### Bug Fixes
+
+* **bridge:** detect Windows global MCP installs ([#141](https://github.com/kunchenguid/chrome-devtools-axi/issues/141)) ([7b8844f](https://github.com/kunchenguid/chrome-devtools-axi/commit/7b8844f2dec6f318f1f3a8053c492fa16a4a72dc))
+* **bridge:** treat MCP tool errors as unhealthy ([#143](https://github.com/kunchenguid/chrome-devtools-axi/issues/143)) ([cbc313e](https://github.com/kunchenguid/chrome-devtools-axi/commit/cbc313e871c82c917db4e43349c67206162c0980))
+* **cli:** report resolved screenshot output paths ([#140](https://github.com/kunchenguid/chrome-devtools-axi/issues/140)) ([d0834b6](https://github.com/kunchenguid/chrome-devtools-axi/commit/d0834b68d9b75ee196f76adccb05484e8bdc77db))
+* **cli:** restore controlled fills and stale ref safety ([#134](https://github.com/kunchenguid/chrome-devtools-axi/issues/134)) ([03bc156](https://github.com/kunchenguid/chrome-devtools-axi/commit/03bc156f0f71a9d8c25332f94f23f8f1ee4d81a7))
+* **cli:** send callable payloads to evaluate_script for scroll, wait, and run helpers ([#142](https://github.com/kunchenguid/chrome-devtools-axi/issues/142)) ([6c90a9a](https://github.com/kunchenguid/chrome-devtools-axi/commit/6c90a9a566fc510c30c69ff255e5212ee886d1ce))
+
+## [0.1.34](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.33...chrome-devtools-axi-v0.1.34) (2026-09-03)
+
+
+### Bug Fixes
+
+* **cli:** reject unknown command flags ([#129](https://github.com/kunchenguid/chrome-devtools-axi/issues/129)) ([deb13a3](https://github.com/kunchenguid/chrome-devtools-axi/commit/deb13a3de2429710f7be4b90b28432d91d11214c))
+
+## [0.1.33](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.32...chrome-devtools-axi-v0.1.33) (2026-08-28)
+
+
+### Bug Fixes
+
+* **bridge:** invalidate page routing after a browser reconnect ([#124](https://github.com/kunchenguid/chrome-devtools-axi/issues/124)) ([be54e07](https://github.com/kunchenguid/chrome-devtools-axi/commit/be54e07fafa198e8a90719a1bb381f9e9f23c17f))
+* **bridge:** name the browser reconnect on the next page-scoped call ([#126](https://github.com/kunchenguid/chrome-devtools-axi/issues/126)) ([52e5b31](https://github.com/kunchenguid/chrome-devtools-axi/commit/52e5b311a610e154651fa657ee8308fe7877f6e6))
+
+## [0.1.32](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.31...chrome-devtools-axi-v0.1.32) (2026-08-28)
+
+
+### Bug Fixes
+
+* negotiate roots and surface file-writing errors ([#122](https://github.com/kunchenguid/chrome-devtools-axi/issues/122)) ([0bb0473](https://github.com/kunchenguid/chrome-devtools-axi/commit/0bb0473da50e17d4d4c866afd85010a4817508da))
+
+## [0.1.31](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.30...chrome-devtools-axi-v0.1.31) (2026-08-26)
+
+
+### Bug Fixes
+
+* inject selected pageId on page-scoped MCP calls ([#120](https://github.com/kunchenguid/chrome-devtools-axi/issues/120)) ([6a9709e](https://github.com/kunchenguid/chrome-devtools-axi/commit/6a9709eb310d819777d36e2abf5e07f9b1013181))
+
+## [0.1.30](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.29...chrome-devtools-axi-v0.1.30) (2026-08-23)
+
+
+### Bug Fixes
+
+* **skill:** defer installed guidance to the current CLI ([#112](https://github.com/kunchenguid/chrome-devtools-axi/issues/112)) ([75dd6ca](https://github.com/kunchenguid/chrome-devtools-axi/commit/75dd6ca57eda1e160df82d73985d471cd405eee3))
+
+## [0.1.29](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.28...chrome-devtools-axi-v0.1.29) (2026-08-07)
+
+
+### Bug Fixes
+
+* **cli:** avoid loading MCP SDK for every command ([#102](https://github.com/kunchenguid/chrome-devtools-axi/issues/102)) ([22df96b](https://github.com/kunchenguid/chrome-devtools-axi/commit/22df96b8e3beda5d235e23e6959537537e281a0c))
+* **cli:** speed up version flag startup ([#104](https://github.com/kunchenguid/chrome-devtools-axi/issues/104)) ([8d31478](https://github.com/kunchenguid/chrome-devtools-axi/commit/8d31478136f564a9a1bbfd883b7403d0e441a5ec))
+
+## [0.1.28](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.27...chrome-devtools-axi-v0.1.28) (2026-07-25)
+
+
+### Bug Fixes
+
+* **bridge:** enforce keychain isolation for launched Chrome ([#91](https://github.com/kunchenguid/chrome-devtools-axi/issues/91)) ([aa162e8](https://github.com/kunchenguid/chrome-devtools-axi/commit/aa162e87f1894593470fd833c36942bdb04b78a3))
+* execute every PR body compliance event ([#89](https://github.com/kunchenguid/chrome-devtools-axi/issues/89)) ([3a1aa04](https://github.com/kunchenguid/chrome-devtools-axi/commit/3a1aa04be8eaa7006211f0ee6d3ff46bbe77d68e))
+
+## [0.1.27](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.26...chrome-devtools-axi-v0.1.27) (2026-07-22)
+
+
+### Bug Fixes
+
+* **bridge:** reject non-loopback Host/Origin to block DNS rebinding (GHSA-x439-jhfh-v9x2) ([4ee5a49](https://github.com/kunchenguid/chrome-devtools-axi/commit/4ee5a49bbdec0c7c0b43aa6d9d6775798fa97534))
+
+## [0.1.26](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.25...chrome-devtools-axi-v0.1.26) (2026-07-01)
+
+
+### Features
+
+* **bridge:** add CHROME_DEVTOOLS_AXI_CHANNEL to select a Chrome release channel ([#74](https://github.com/kunchenguid/chrome-devtools-axi/issues/74)) ([b738215](https://github.com/kunchenguid/chrome-devtools-axi/commit/b7382154fc2006a89b2c4cfb71de8f6e24169c87))
+* **sessions:** add CHROME_DEVTOOLS_AXI_SESSION for concurrent bridge isolation ([#75](https://github.com/kunchenguid/chrome-devtools-axi/issues/75)) ([eee2fb7](https://github.com/kunchenguid/chrome-devtools-axi/commit/eee2fb7ebfa8779fe9f5f8648cd50be9594792e4))
+
+
+### Bug Fixes
+
+* **cli:** resolve output paths from caller cwd ([#77](https://github.com/kunchenguid/chrome-devtools-axi/issues/77)) ([2b5a851](https://github.com/kunchenguid/chrome-devtools-axi/commit/2b5a8519c12f68c356f7434df4623727ac4283cd))
+
+## [0.1.25](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.24...chrome-devtools-axi-v0.1.25) (2026-06-27)
+
+
+### Features
+
+* inherit SDK self-update command ([#72](https://github.com/kunchenguid/chrome-devtools-axi/issues/72)) ([87c7031](https://github.com/kunchenguid/chrome-devtools-axi/commit/87c7031ed9a65f45eac0e743c8b5edc4c1c901c5))
+
+
+### Bug Fixes
+
+* **skills:** add guardrails to generated agent skill ([#70](https://github.com/kunchenguid/chrome-devtools-axi/issues/70)) ([8d7d627](https://github.com/kunchenguid/chrome-devtools-axi/commit/8d7d627c8603accb2d1fb67f1909f6bb193a529a))
+
+## [0.1.24](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.23...chrome-devtools-axi-v0.1.24) (2026-06-12)
+
+
+### Features
+
+* ship installable chrome-devtools-axi agent skill ([#63](https://github.com/kunchenguid/chrome-devtools-axi/issues/63)) ([fc0c335](https://github.com/kunchenguid/chrome-devtools-axi/commit/fc0c33556ece6032eb1b0954298daef4e88455f8))
+* **skills:** add Hermes metadata to public skill ([#66](https://github.com/kunchenguid/chrome-devtools-axi/issues/66)) ([125f2c3](https://github.com/kunchenguid/chrome-devtools-axi/commit/125f2c352ac9e5bb389fba6fe6855bf6e8fa8761))
+
+
+### Bug Fixes
+
+* hide internal no-mistakes skill from discovery ([#65](https://github.com/kunchenguid/chrome-devtools-axi/issues/65)) ([12f1d90](https://github.com/kunchenguid/chrome-devtools-axi/commit/12f1d90756eb2a5fc22ab5ecc6a0fb0053a4c367))
+
+## [0.1.23](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.22...chrome-devtools-axi-v0.1.23) (2026-05-23)
+
+
+### Features
+
+* **cli:** add explicit hook setup command ([#61](https://github.com/kunchenguid/chrome-devtools-axi/issues/61)) ([06049a2](https://github.com/kunchenguid/chrome-devtools-axi/commit/06049a26016a4ac726faa3c9161bec55a685a69b))
+
+## [0.1.22](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.21...chrome-devtools-axi-v0.1.22) (2026-05-13)
+
+
+### Bug Fixes
+
+* enable Codex hooks with hooks feature flag ([#59](https://github.com/kunchenguid/chrome-devtools-axi/issues/59)) ([e67a5ec](https://github.com/kunchenguid/chrome-devtools-axi/commit/e67a5ec723eff9756e391641754472a0e8896e37))
+
+## [0.1.21](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.20...chrome-devtools-axi-v0.1.21) (2026-05-07)
+
+
+### Bug Fixes
+
+* **cli:** make type all clear prior filters ([#53](https://github.com/kunchenguid/chrome-devtools-axi/issues/53)) ([8001534](https://github.com/kunchenguid/chrome-devtools-axi/commit/8001534b03d5dd070fc15d90ca0ecd8486e7d7e4))
+* handle function eval input wrapping ([#56](https://github.com/kunchenguid/chrome-devtools-axi/issues/56)) ([d9e6d9f](https://github.com/kunchenguid/chrome-devtools-axi/commit/d9e6d9f1b530a4a67e14e66859caed0215d472be))
+* reject stale generation-tagged refs ([#55](https://github.com/kunchenguid/chrome-devtools-axi/issues/55)) ([ccac521](https://github.com/kunchenguid/chrome-devtools-axi/commit/ccac521cf649479cab2a1cad147a3526bb7b7bca))
+
+## [0.1.20](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.19...chrome-devtools-axi-v0.1.20) (2026-05-06)
+
+
+### Bug Fixes
+
+* recycle stale bridge processes ([#51](https://github.com/kunchenguid/chrome-devtools-axi/issues/51)) ([9a97fbf](https://github.com/kunchenguid/chrome-devtools-axi/commit/9a97fbf6871637c07c6db5552c45ae9465a7c5bd))
+
+## [0.1.19](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.18...chrome-devtools-axi-v0.1.19) (2026-05-03)
+
+
+### Features
+
+* add CHROME_DEVTOOLS_AXI_MCP_PATH + BRIDGE_TIMEOUT_MS to unblock slow npx bootstrap ([#47](https://github.com/kunchenguid/chrome-devtools-axi/issues/47)) ([6252b56](https://github.com/kunchenguid/chrome-devtools-axi/commit/6252b5601e5cb1f0f8275c5590f815530afec2f9))
+
+## [0.1.18](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.17...chrome-devtools-axi-v0.1.18) (2026-04-25)
+
+
+### Miscellaneous Chores
+
+* release 0.1.18 ([cdb5c4b](https://github.com/kunchenguid/chrome-devtools-axi/commit/cdb5c4be015e03d62478db2fc5ea12e69c2b8c44))
+
+## [0.1.17](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.16...chrome-devtools-axi-v0.1.17) (2026-04-16)
+
+
+### Bug Fixes
+
+* **ws:** support websocket browser endpoints and validate ws headers ([#37](https://github.com/kunchenguid/chrome-devtools-axi/issues/37)) ([8376a4f](https://github.com/kunchenguid/chrome-devtools-axi/commit/8376a4fd8c5bbc22d19598b64d25da6de7587eae))
+
+## [0.1.16](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.15...chrome-devtools-axi-v0.1.16) (2026-04-16)
+
+
+### Features
+
+* add CHROME_DEVTOOLS_AXI_AUTO_CONNECT for Chrome 144+ autoConnect ([#33](https://github.com/kunchenguid/chrome-devtools-axi/issues/33)) ([542f176](https://github.com/kunchenguid/chrome-devtools-axi/commit/542f1762b8d63aacbfe19019c07c58758ab7517b))
+* support ws:// and wss:// browser URLs plus CHROME_DEVTOOLS_AXI_WS_HEADERS ([c8710d5](https://github.com/kunchenguid/chrome-devtools-axi/commit/c8710d5ca958e08985180e4e5cf48c7ba8db0530))
+
+## [0.1.15](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.14...chrome-devtools-axi-v0.1.15) (2026-04-11)
+
+
+### Features
+
+* add BROWSER_URL and USER_DATA_DIR env vars for persistent sessions ([#30](https://github.com/kunchenguid/chrome-devtools-axi/issues/30)) ([400fdda](https://github.com/kunchenguid/chrome-devtools-axi/commit/400fddad94545a9b7e353dab57892b2351c8574c))
+
+## [0.1.14](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.13...chrome-devtools-axi-v0.1.14) (2026-04-10)
+
+
+### Features
+
+* add headed mode, custom Chrome args, and GPU docs ([#25](https://github.com/kunchenguid/chrome-devtools-axi/issues/25)) ([a917c1a](https://github.com/kunchenguid/chrome-devtools-axi/commit/a917c1af14b4e937f5f52bdb0d89e8a4eabe8948))
+
+## [0.1.13](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.12...chrome-devtools-axi-v0.1.13) (2026-04-10)
+
+
+### Bug Fixes
+
+* **homeview:** reduce verbosity in home view ([#26](https://github.com/kunchenguid/chrome-devtools-axi/issues/26)) ([df709e9](https://github.com/kunchenguid/chrome-devtools-axi/commit/df709e98f1e06e90226b1ba95d29981de8ff5c17))
+
+## [0.1.12](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.11...chrome-devtools-axi-v0.1.12) (2026-04-03)
+
+
+### Features
+
+* migrate CLI to axi-sdk-js ([#21](https://github.com/kunchenguid/chrome-devtools-axi/issues/21)) ([257c953](https://github.com/kunchenguid/chrome-devtools-axi/commit/257c953e101bb176e52c1eb874f46553dac67085))
+
+## [0.1.11](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.10...chrome-devtools-axi-v0.1.11) (2026-04-01)
+
+
+### Bug Fixes
+
+* **cli:** add metadata to home view ([#19](https://github.com/kunchenguid/chrome-devtools-axi/issues/19)) ([8900215](https://github.com/kunchenguid/chrome-devtools-axi/commit/8900215983f79915fc1d4527b620003a9b900f0b))
+
+## [0.1.10](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.9...chrome-devtools-axi-v0.1.10) (2026-04-01)
+
+
+### Bug Fixes
+
+* skip hook install for dev entrypoints ([#18](https://github.com/kunchenguid/chrome-devtools-axi/issues/18)) ([b12e043](https://github.com/kunchenguid/chrome-devtools-axi/commit/b12e043c731b66cf7246cb2fbd541dd70255bc39))
+* trim no-session help text ([#16](https://github.com/kunchenguid/chrome-devtools-axi/issues/16)) ([a6c9820](https://github.com/kunchenguid/chrome-devtools-axi/commit/a6c9820798a5b466d6920592c68c52b60bc7e6a6))
+
+## [0.1.9](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.8...chrome-devtools-axi-v0.1.9) (2026-03-31)
+
+
+### Bug Fixes
+
+* **snapshot:** improve truncation handling ([#13](https://github.com/kunchenguid/chrome-devtools-axi/issues/13)) ([7ebca68](https://github.com/kunchenguid/chrome-devtools-axi/commit/7ebca6867ff9bd950f63bc8fad7efc7913ccdcd5))
+* **snapshot:** skip truncation when marker adds overhead ([#15](https://github.com/kunchenguid/chrome-devtools-axi/issues/15)) ([5ae7d62](https://github.com/kunchenguid/chrome-devtools-axi/commit/5ae7d6230e7b9fab5ac83933c6f067202dcc7742))
+
+## [0.1.8](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.7...chrome-devtools-axi-v0.1.8) (2026-03-30)
+
+
+### Bug Fixes
+
+* **bridge:** handle exit and orphan cleanup ([#11](https://github.com/kunchenguid/chrome-devtools-axi/issues/11)) ([ea32d9b](https://github.com/kunchenguid/chrome-devtools-axi/commit/ea32d9b7fdc3f25da26e235e9f3677e5cbeee410))
+
+## [0.1.7](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.6...chrome-devtools-axi-v0.1.7) (2026-03-30)
+
+
+### Bug Fixes
+
+* **cli:** support function input in eval ([#9](https://github.com/kunchenguid/chrome-devtools-axi/issues/9)) ([cb37c3d](https://github.com/kunchenguid/chrome-devtools-axi/commit/cb37c3d9c04ed98ade1fa053574dbb2be18fcf98))
+
+## [0.1.6](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.5...chrome-devtools-axi-v0.1.6) (2026-03-30)
+
+
+### Features
+
+* **run-cmd:** add script runner command ([#7](https://github.com/kunchenguid/chrome-devtools-axi/issues/7)) ([5361cc2](https://github.com/kunchenguid/chrome-devtools-axi/commit/5361cc2d512beea2061b7511c9638308feb5abd2))
+
+
+### Bug Fixes
+
+* **hooks:** guard installHooks against unrelated execPath ([61c64e7](https://github.com/kunchenguid/chrome-devtools-axi/commit/61c64e7ffe6abcdaab0ee07487d019a494ac6bbe))
+
+## [0.1.5](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.4...chrome-devtools-axi-v0.1.5) (2026-03-29)
+
+
+### Bug Fixes
+
+* code cleanup ([#5](https://github.com/kunchenguid/chrome-devtools-axi/issues/5)) ([4c435fe](https://github.com/kunchenguid/chrome-devtools-axi/commit/4c435fedf713bba367fc666520cab995c7e21740))
+
+## [0.1.4](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.3...chrome-devtools-axi-v0.1.4) (2026-03-28)
+
+
+### Bug Fixes
+
+* enable codex hooks in config.toml ([1c7a38a](https://github.com/kunchenguid/chrome-devtools-axi/commit/1c7a38a6684edab81acf6ffcc831270792f7f191))
+
+## [0.1.3](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.2...chrome-devtools-axi-v0.1.3) (2026-03-28)
+
+
+### Bug Fixes
+
+* small correction in README ([73c4780](https://github.com/kunchenguid/chrome-devtools-axi/commit/73c47806e56b3c1cc256e8c15bc88224637ebadd))
+
+## [0.1.2](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.1...chrome-devtools-axi-v0.1.2) (2026-03-28)
+
+
+### Features
+
+* **cli:** add --full flag and session hooks ([25c3f53](https://github.com/kunchenguid/chrome-devtools-axi/commit/25c3f5300410c3144fba523f012a42ac454b139c))
+* **cli:** add page management commands and tests ([32cc1f1](https://github.com/kunchenguid/chrome-devtools-axi/commit/32cc1f1171d1ec05f3e98979d93522543a7f8c7c))
+
+## [0.1.1](https://github.com/kunchenguid/chrome-devtools-axi/compare/chrome-devtools-axi-v0.1.0...chrome-devtools-axi-v0.1.1) (2026-03-27)
+
+
+### Features
+
+* initial commit ([ac8389b](https://github.com/kunchenguid/chrome-devtools-axi/commit/ac8389b7182a0a121b33589216b8eed60378c5f4))

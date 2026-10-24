@@ -1,0 +1,5 @@
+Upstream: https://github.com/kunchenguid/chrome-devtools-axi
+Commit:   5a23296f1972faa7665fe09216d702d03a84b749
+Date:     2026-10-17T06:35:30-07:00
+Source README: https://github.com/kunchenguid/chrome-devtools-axi#readme
+Snapshot of tracked files at the commit above. Excluded: .github/ (upstream CI/publish config).

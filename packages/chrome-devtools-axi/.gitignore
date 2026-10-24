@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.desloppify/
+.DS_Store
+.no-mistakes/evidence/

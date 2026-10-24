@@ -1,0 +1,1269 @@
+/**
+ * Persistent MCP bridge server for chrome-devtools-axi.
+ *
+ * Selects either a local/proxy stdio session or a direct Streamable HTTP
+ * session and maintains it persistently. Exposes a simple HTTP API:
+ *   POST /call  { name, args }  → { result }
+ *   GET  /tools                 → [{ name, description }]
+ *   GET  /health                → { status: "ok", session } or 503 { status: "error", error }
+ *   GET  /health?deep=1         → also verifies the attached CDP target; 503 may include reason,
+ *                                 200 adds pageIdentityChanged when the probe consumed
+ *                                 chrome-devtools-mcp's one-shot reconnect marker *and*
+ *                                 that dropped a persisted page selection
+ *
+ * Writes a PID file to the active session's state dir on startup
+ * (~/.chrome-devtools-axi/bridge.pid for the default session; named sessions
+ * nest under sessions/<name>/ - see src/sessions.ts).
+ */
+
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import {
+  getDefaultEnvironment,
+  StdioClientTransport,
+} from "@modelcontextprotocol/sdk/client/stdio.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import { execFileSync, execSync } from "node:child_process";
+import {
+  createServer,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from "node:http";
+import {
+  accessSync,
+  constants as fsConstants,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import {
+  basename,
+  delimiter,
+  dirname,
+  isAbsolute,
+  join,
+  resolve,
+} from "node:path";
+import { pathToFileURL } from "node:url";
+import {
+  AMBIENT_REQUEST_HEADER,
+  BRIDGE_PORT_IN_USE_EXIT_CODE,
+  PAGE_IDENTITY_CHANGED_ERROR,
+  resolveBridgeScript,
+} from "./bridge-script.js";
+import {
+  createIdleTracker,
+  IDLE_TIMEOUT_ENV,
+  resolveIdleTimeoutMs,
+  type IdleTracker,
+} from "./idle.js";
+import { clearSelectedPageId } from "./selected-page.js";
+import {
+  resolveSessionName,
+  resolveSessionPidFile,
+  resolveSessionPort,
+} from "./sessions.js";
+
+// Re-exported so existing bridge consumers keep a single import surface; the
+// definitions live in the MCP-free ./bridge-script.js (see its header).
+export {
+  BRIDGE_PORT_IN_USE_EXIT_CODE,
+  PAGE_IDENTITY_CHANGED_ERROR,
+  resolveBridgeScript,
+};
+
+export interface BridgeContentBlock {
+  type: string;
+  text?: string;
+}
+
+export interface BridgeCallPayload {
+  name: string;
+  args: Record<string, unknown>;
+  /**
+   * Absolute directories the caller wants added to the MCP workspace roots for
+   * this call, so file-writing tools may write there. See
+   * {@link RootsAwareClient.applyRoots} and the roots negotiation in
+   * `runBridge`.
+   */
+  roots?: string[];
+}
+
+interface BridgeToolDescription {
+  name: string;
+  description?: string;
+}
+
+export interface BridgeClient {
+  listTools(): Promise<{ tools: BridgeToolDescription[] }>;
+  callTool(
+    request: {
+      name: string;
+      arguments: Record<string, unknown>;
+    },
+    roots?: string[],
+  ): Promise<unknown>;
+  close(): Promise<void>;
+  /**
+   * Negotiate the MCP workspace roots to the given absolute directories before
+   * the next tool call, so a caller-supplied write path outside the OS temp
+   * directory passes chrome-devtools-mcp's `validatePath`. Optional so test
+   * fakes need not implement it; the real client always does.
+   */
+  applyRoots?(dirs: string[]): Promise<void>;
+}
+
+/** A {@link BridgeClient} that always negotiates MCP roots. */
+export interface RootsAwareClient extends BridgeClient {
+  applyRoots(dirs: string[]): Promise<void>;
+}
+
+export async function isBridgeClientConnected(
+  client: BridgeClient,
+): Promise<boolean> {
+  try {
+    await client.listTools();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Probe whether the bridge's underlying CDP target is reachable. Drives one
+ * round-trip MCP tool call (`list_pages`) that requires a live browser/CDP
+ * connection — `listTools()` alone only confirms the local MCP server is up,
+ * not that the attached browser is still alive. Used by `/health?deep=1` so
+ * `ensureBridge` can detect a stale bridge after the user kills + restarts
+ * the underlying Chrome/Electron target.
+ *
+ * It also reports chrome-devtools-mcp's one-shot reconnect marker (see
+ * {@link didMcpPageIdentityChange}) rather than only its own reachability:
+ * `ensureBridge` deep-probes before every command, so after an in-process
+ * browser reconnect this `list_pages` is the first call to see the marker and
+ * consumes it, leaving none for the `/call` that follows. `handleBridgeRequest`
+ * relays that to the CLI, which otherwise has no way to tell a selection the
+ * reconnect just dropped from one that was never made.
+ */
+export async function isBridgeTargetReachable(
+  client: BridgeClient,
+): Promise<
+  { ok: true; pageIdentityChanged: boolean } | { ok: false; reason: string }
+> {
+  try {
+    const result = await client.callTool({
+      name: "list_pages",
+      arguments: {},
+    });
+    if (isToolResultError(result)) {
+      const reason = extractToolText(getToolContent(result));
+      return { ok: false, reason: reason || 'Tool "list_pages" failed' };
+    }
+    return {
+      ok: true,
+      pageIdentityChanged: didMcpPageIdentityChange(result),
+    };
+  } catch (error) {
+    return { ok: false, reason: getErrorMessage(error) };
+  }
+}
+
+function writePidFile(port: number): void {
+  const pidFile = resolveSessionPidFile();
+  mkdirSync(dirname(pidFile), { recursive: true });
+  writeFileSync(pidFile, JSON.stringify({ pid: process.pid, port }));
+}
+
+/**
+ * Remove the session PID file, but only when this process owns it. On a
+ * same-session bind race the losing bridge exits via EADDRINUSE after the
+ * winning bridge has already written the shared PID file; an unconditional
+ * unlink would delete the still-running winner's handle and orphan it (later
+ * `stop`/reuse can no longer find it). A missing, unreadable, or malformed
+ * file — or one recording a different pid — is left untouched. `ownerPid` is
+ * injectable for tests.
+ */
+export function removePidFile(
+  pidFile: string = resolveSessionPidFile(),
+  ownerPid: number = process.pid,
+): void {
+  try {
+    const data = JSON.parse(readFileSync(pidFile, "utf-8")) as {
+      pid?: unknown;
+    };
+    if (data.pid !== ownerPid) return;
+  } catch {
+    // Missing, unreadable, or malformed — nothing we own to remove.
+    return;
+  }
+  try {
+    unlinkSync(pidFile);
+  } catch {
+    // Already gone — fine
+  }
+}
+
+export function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Hostnames that identify the loopback interface. The bridge is a persistent
+ * unauthenticated loopback service on a known port, so it is the target of
+ * DNS-rebinding: a malicious page rebinds its own domain to 127.0.0.1 and the
+ * browser then issues same-origin requests that hit the bridge. Binding to
+ * 127.0.0.1 does NOT stop this - the packets still arrive on loopback. The one
+ * thing a rebound request cannot hide is that it carries the attacker's own
+ * domain in the `Host` (and `Origin`) header, and those are forbidden headers
+ * page JavaScript cannot forge. Requiring both to name loopback is therefore
+ * THE anti-rebinding control (see GHSA-x439-jhfh-v9x2).
+ */
+const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost", "::1"]);
+
+function isLoopbackHostname(hostname: string): boolean {
+  // Node's URL parser keeps IPv6 hostnames bracketed (`[::1]`); strip the
+  // brackets so the bare literal matches LOOPBACK_HOSTNAMES.
+  const normalized = hostname
+    .replace(/^\[/, "")
+    .replace(/\]$/, "")
+    .toLowerCase();
+  return LOOPBACK_HOSTNAMES.has(normalized);
+}
+
+/**
+ * Extract the hostname from a `Host` header value, dropping any `:port` suffix.
+ * Handles bracketed IPv6 (`[::1]:9224` -> `::1`) and bare IPv6 literals
+ * (`::1`). Returns null for an empty/whitespace-only value.
+ */
+export function extractHostHeaderHostname(hostHeader: string): string | null {
+  const trimmed = hostHeader.trim();
+  if (trimmed.length === 0) return null;
+  if (trimmed.startsWith("[")) {
+    const end = trimmed.indexOf("]");
+    if (end === -1) return null;
+    // Anything after the closing bracket must be a `:port` suffix. Reject
+    // trailing garbage (e.g. "[::1]evil.com") instead of treating it as the
+    // loopback literal "::1" - this keeps the Host parser as strict as the
+    // Origin path (new URL(...).hostname), which already rejects the analogue.
+    const rest = trimmed.slice(end + 1);
+    if (rest.length > 0 && !rest.startsWith(":")) return null;
+    return trimmed.slice(1, end);
+  }
+  const firstColon = trimmed.indexOf(":");
+  if (firstColon === -1) return trimmed;
+  // A second colon means this is a bare (unbracketed) IPv6 literal with no
+  // port, not a host:port pair - keep the whole string as the hostname.
+  if (trimmed.indexOf(":", firstColon + 1) !== -1) return trimmed;
+  return trimmed.slice(0, firstColon);
+}
+
+/**
+ * True when the `Host` header is present and names the loopback interface.
+ * A missing Host, or one naming any other host (e.g. a rebound
+ * `evil.attacker.com`), is rejected.
+ */
+export function isAllowedBridgeHost(host: string | undefined): boolean {
+  if (host === undefined) return false;
+  const hostname = extractHostHeaderHostname(host);
+  if (hostname === null) return false;
+  return isLoopbackHostname(hostname);
+}
+
+/**
+ * True when the request carries no `Origin` (the CLI client sends none) or an
+ * `Origin` whose hostname is loopback. A present-but-non-loopback or
+ * unparseable Origin is rejected.
+ */
+export function isRequestOriginAllowed(req: IncomingMessage): boolean {
+  const rawOrigin = req.headers.origin;
+  if (rawOrigin === undefined) return true;
+  const origin = Array.isArray(rawOrigin) ? rawOrigin[0] : rawOrigin;
+  if (origin === undefined || origin.length === 0) return true;
+  let hostname: string;
+  try {
+    hostname = new URL(origin).hostname;
+  } catch {
+    return false;
+  }
+  return isLoopbackHostname(hostname);
+}
+
+/**
+ * Anti-rebinding gate: a request is allowed only when its `Host` header names
+ * loopback and any `Origin` header also names loopback. Checked FIRST on every
+ * route (health included) so a rebound request is refused before any CDP tool
+ * can run.
+ */
+export function isRequestAllowed(req: IncomingMessage): boolean {
+  return isAllowedBridgeHost(req.headers.host) && isRequestOriginAllowed(req);
+}
+
+export function extractToolText(content: BridgeContentBlock[]): string {
+  return content
+    .filter((block) => block.type === "text" && typeof block.text === "string")
+    .map((block) => block.text)
+    .join("\n");
+}
+
+function getToolContent(result: unknown): BridgeContentBlock[] {
+  if (
+    !result ||
+    typeof result !== "object" ||
+    !("content" in result) ||
+    !Array.isArray(result.content)
+  ) {
+    return [];
+  }
+  return result.content as BridgeContentBlock[];
+}
+
+/**
+ * Whether an MCP tool result signals failure (`isError: true`). chrome-devtools-mcp
+ * reports recoverable tool failures - a denied file write, a bad selector, a
+ * navigation error - as a *successful* JSON-RPC response carrying `isError`, not
+ * as a protocol error. Treating that as success is how a rejected screenshot got
+ * reported as written (issue #96); the bridge must surface it as a failure so the
+ * CLI exits non-zero with the tool's own message.
+ */
+export function isToolResultError(result: unknown): boolean {
+  return (
+    !!result &&
+    typeof result === "object" &&
+    "isError" in result &&
+    (result as { isError?: unknown }).isError === true
+  );
+}
+
+const MCP_RECONNECT_NOTICE_PREFIX =
+  "Note: the browser was restarted or reconnected since the last call.";
+
+/**
+ * chrome-devtools-mcp keeps its stdio process alive when Chrome reconnects,
+ * but deliberately reissues every page id. Its one-shot reconnect marker is
+ * the authoritative identity boundary; the bridge must observe it before the
+ * response is flattened or a persisted AXI selection can outlive the ids it
+ * belongs to.
+ */
+export function didMcpPageIdentityChange(
+  result: unknown,
+  flattenedText?: string,
+): boolean {
+  if (hasStructuredReconnectMarker(result)) return true;
+
+  // Upstream only includes structuredContent behind its experimental flag; its
+  // default protocol response carries the same one-shot marker as text. Only
+  // the first line is consulted: page-owned strings that upstream interpolates
+  // verbatim (a dialog message, a title) may contain raw newlines and would
+  // otherwise open a line of their own that starts with this clause. Within
+  // that first line the match stays a prefix, so a reworded tail or a renamed
+  // `list_pages` still registers.
+  //
+  // UNVERIFIED DEPENDENCY CONTRACT: this assumes chrome-devtools-mcp emits the
+  // reconnect notice as the FIRST line of the flattened body (and, for the
+  // sibling matcher in `src/client.ts`, appends `Error: <message>` LAST).
+  // Nothing in the test suite pins that order - chrome-devtools-mcp is not
+  // installed as a devDependency, so there is no pinned build to assert
+  // against. If upstream reorders, the consequence is a less accurate message,
+  // not a silent retarget: `isMissingPageError` is an independent net on the
+  // last non-empty line, and upstream hands out page ids from a process-wide
+  // monotonic counter, so a stale id fails to resolve rather than landing on
+  // an unrelated page.
+  const text = flattenedText ?? extractToolText(getToolContent(result));
+  const [firstLine = ""] = text.split(/\r?\n/, 1);
+  return firstLine.trim().startsWith(MCP_RECONNECT_NOTICE_PREFIX);
+}
+
+function hasStructuredReconnectMarker(result: unknown): boolean {
+  if (!result || typeof result !== "object") return false;
+  if (!("structuredContent" in result)) return false;
+  const structured = (result as { structuredContent?: unknown })
+    .structuredContent;
+  return (
+    !!structured &&
+    typeof structured === "object" &&
+    "reconnected" in structured &&
+    (structured as { reconnected?: unknown }).reconnected === true
+  );
+}
+
+export function parseBridgeCallPayload(body: string): BridgeCallPayload {
+  let payload: { name?: unknown; args?: unknown; roots?: unknown };
+  try {
+    payload = JSON.parse(body) as {
+      name?: unknown;
+      args?: unknown;
+      roots?: unknown;
+    };
+  } catch {
+    throw new Error("Invalid bridge request payload");
+  }
+  if (typeof payload.name !== "string" || payload.name.length === 0) {
+    throw new Error("Invalid bridge request payload");
+  }
+  const roots = parseRootsField(payload.roots);
+  if (payload.args === undefined) {
+    return { name: payload.name, args: {}, ...(roots ? { roots } : {}) };
+  }
+  if (
+    payload.args === null ||
+    typeof payload.args !== "object" ||
+    Array.isArray(payload.args)
+  ) {
+    throw new Error("Invalid bridge request payload");
+  }
+  return {
+    name: payload.name,
+    args: payload.args as Record<string, unknown>,
+    ...(roots ? { roots } : {}),
+  };
+}
+
+/**
+ * Validate the optional `roots` field: absent, or an array of absolute
+ * directory paths. Any other shape is a malformed payload and is rejected
+ * loudly rather than silently dropped, so a client bug can't quietly disable
+ * roots negotiation or make roots depend on the bridge process's cwd.
+ */
+function parseRootsField(roots: unknown): string[] | undefined {
+  if (roots === undefined) return undefined;
+  if (
+    !Array.isArray(roots) ||
+    !roots.every((r) => typeof r === "string" && isAbsolute(r))
+  ) {
+    throw new Error("Invalid bridge request payload");
+  }
+  return roots as string[];
+}
+
+async function readRequestBody(req: IncomingMessage): Promise<string> {
+  let body = "";
+  for await (const chunk of req) {
+    body += typeof chunk === "string" ? chunk : chunk.toString("utf-8");
+  }
+  return body;
+}
+
+function writeJson(
+  res: ServerResponse,
+  statusCode: number,
+  payload: unknown,
+): void {
+  res.statusCode = statusCode;
+  res.end(JSON.stringify(payload));
+}
+
+async function handleToolsRequest(
+  client: BridgeClient,
+  res: ServerResponse,
+): Promise<void> {
+  const result = await client.listTools();
+  writeJson(
+    res,
+    200,
+    result.tools.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+    })),
+  );
+}
+
+async function handleCallRequest(
+  client: BridgeClient,
+  req: IncomingMessage,
+  res: ServerResponse,
+  onPageIdentityChanged?: () => boolean | void,
+): Promise<void> {
+  const body = await readRequestBody(req);
+  const payload = parseBridgeCallPayload(body);
+  const result = await client.callTool(
+    {
+      name: payload.name,
+      arguments: payload.args,
+    },
+    payload.roots,
+  );
+  const text = extractToolText(getToolContent(result));
+  const pageIdentityChanged = didMcpPageIdentityChange(result, text);
+  if (pageIdentityChanged) onPageIdentityChanged?.();
+  // The reconnect that reissued every page id happened *during* this call, so
+  // an explicit `pageId` in the request was resolved against the new id space:
+  // the content may belong to another tab, and upstream's own failure text
+  // ("No page found", because page ids come from a monotonic counter) names a
+  // missing page instead of the reconnect that caused it. Report the identity
+  // boundary either way, ahead of the tool-error branch, so the caller
+  // re-selects rather than hunting for a closed tab. Only a call that named no
+  // page - `list_pages`, `new_page` - targeted no particular tab and is left
+  // alone. The home view probe is NOT one of those: it always sends the
+  // persisted `pageId`, so after a reconnect it takes this branch, `postTool`
+  // throws, and `getSessionSnapshotIfRunning` degrades to no page. That
+  // degradation is intentional - rendering a snapshot resolved in a reissued
+  // id space is exactly the silent retarget this branch exists to prevent.
+  if (pageIdentityChanged && typeof payload.args.pageId === "number") {
+    writeJson(res, 200, { error: PAGE_IDENTITY_CHANGED_ERROR });
+    return;
+  }
+  if (isToolResultError(result)) {
+    // Surface the tool's own failure text as an error so the CLI throws and
+    // exits non-zero instead of printing success (issue #96).
+    writeJson(res, 200, { error: text || `Tool "${payload.name}" failed` });
+    return;
+  }
+  writeJson(res, 200, { result: text });
+}
+
+export async function handleBridgeRequest(
+  client: BridgeClient,
+  req: IncomingMessage,
+  res: ServerResponse,
+  sessionName?: string,
+  logForbidden?: (message: string) => void,
+  onPageIdentityChanged?: () => boolean | void,
+): Promise<void> {
+  res.setHeader("Content-Type", "application/json");
+
+  // Reject rebound requests before any routing - see isRequestAllowed and
+  // GHSA-x439-jhfh-v9x2. This gate covers /health, /tools, and /call alike.
+  if (!isRequestAllowed(req)) {
+    // Log the refusal so an operator can tell a mis-configured client apart
+    // from an actual rebinding attempt. Injected (not a direct
+    // logBridgeMessage call) so unit tests stay quiet unless they opt in.
+    const rawOrigin = req.headers.origin;
+    const origin = Array.isArray(rawOrigin) ? rawOrigin[0] : rawOrigin;
+    logForbidden?.(
+      `Rejected request with disallowed host: host=${req.headers.host ?? ""} ` +
+        `origin=${origin ?? ""} ${req.method ?? ""} ${req.url ?? ""}`,
+    );
+    writeJson(res, 403, { error: "Forbidden host" });
+    return;
+  }
+
+  try {
+    if (
+      req.method === "GET" &&
+      (req.url === "/health" || req.url?.startsWith("/health?"))
+    ) {
+      if (!(await isBridgeClientConnected(client))) {
+        writeJson(res, 503, { status: "error", error: "Not connected" });
+        return;
+      }
+      const deep = req.url.includes("deep=1");
+      let droppedSelection = false;
+      if (deep) {
+        const probe = await isBridgeTargetReachable(client);
+        if (!probe.ok) {
+          writeJson(res, 503, {
+            status: "error",
+            error: "CDP target unreachable",
+            reason: probe.reason,
+          });
+          return;
+        }
+        // The marker alone only says the browser reconnected. Reporting that
+        // to a session with no routing would invent a loss, so the flag rides
+        // on the clear having actually removed an id.
+        if (probe.pageIdentityChanged) {
+          droppedSelection = onPageIdentityChanged?.() === true;
+        }
+      }
+      // Absent on a shallow probe and on a reconnect that dropped nothing, so
+      // the CLI reads its absence as "no routing was lost" rather than "old
+      // bridge".
+      writeJson(res, 200, {
+        status: "ok",
+        session: sessionName,
+        ...(droppedSelection ? { pageIdentityChanged: true } : {}),
+      });
+      return;
+    }
+
+    if (req.method === "GET" && req.url === "/tools") {
+      await handleToolsRequest(client, res);
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/call") {
+      await handleCallRequest(client, req, res, onPageIdentityChanged);
+      return;
+    }
+  } catch (error) {
+    writeJson(res, 500, { error: getErrorMessage(error) });
+    return;
+  }
+
+  writeJson(res, 404, { error: "not found" });
+}
+
+/**
+ * Whether a finished request renews an opted-in idle timeout: any request the
+ * anti-rebinding gate accepts, except the CLI's ambient home-view probe.
+ */
+export function isIdleActivity(req: IncomingMessage): boolean {
+  return isRequestAllowed(req) && req.headers[AMBIENT_REQUEST_HEADER] !== "1";
+}
+
+export function createBridgeServer(
+  client: BridgeClient,
+  sessionName?: string,
+  idle?: IdleTracker,
+): Server {
+  return createServer((req, res) => {
+    const end = idle?.begin();
+    if (end) res.once("close", () => end(isIdleActivity(req)));
+    void handleBridgeRequest(
+      client,
+      req,
+      res,
+      sessionName,
+      logBridgeMessage,
+      clearSelectedPageId,
+    );
+  });
+}
+
+function logBridgeMessage(message: string): void {
+  process.stderr.write(`[chrome-devtools-axi] ${message}\n`);
+}
+
+/**
+ * Handle a fatal HTTP server error by logging it and exiting non-zero. An
+ * EADDRINUSE means another bridge already owns this port (typically because
+ * `CHROME_DEVTOOLS_AXI_PORT` was exported globally, forcing every session onto
+ * one port); it exits with {@link BRIDGE_PORT_IN_USE_EXIT_CODE} so `ensureBridge`
+ * can distinguish it from any other early death. Failing loudly prevents
+ * `ensureBridge` from silently attaching to the other session's bridge. `exit`
+ * is injectable for tests.
+ */
+export function handleBridgeServerError(
+  error: NodeJS.ErrnoException,
+  port: number,
+  exit: (code: number) => void = process.exit,
+): void {
+  if (error.code === "EADDRINUSE") {
+    logBridgeMessage(
+      `Port ${port} is already in use (EADDRINUSE) - another bridge is listening there. ` +
+        `Exporting CHROME_DEVTOOLS_AXI_PORT globally forces every session onto one port; ` +
+        `unset it so each session gets its own, or set it only per-session.`,
+    );
+    exit(BRIDGE_PORT_IN_USE_EXIT_CODE);
+    return;
+  }
+  logBridgeMessage(`Bridge server error: ${getErrorMessage(error)}`);
+  exit(1);
+}
+
+function writeReadySignal(): void {
+  process.stdout.write("READY\n");
+}
+
+/**
+ * Chrome flags that keep a browser *we* launch away from the machine owner's
+ * login keychain.
+ *
+ * `--use-mock-keychain` makes Chromium's OSCrypt use an in-memory mock instead
+ * of the real `Chrome Safe Storage` keychain item; `--password-store=basic`
+ * keeps the password store off the platform secret service. Without them a
+ * launched Chrome calls `SecItemAdd` against the login keychain, and if that
+ * keychain is not resolvable for the browser process (for example because it
+ * was spawned with a redirected `HOME`) macOS answers `errSecNoDefaultKeychain`
+ * and raises the `system.keychain.create.loginkc` authorization panel -
+ * "Keychain Not Found ... Reset To Defaults" - on the machine owner's screen.
+ *
+ * Puppeteer happens to pass both flags in its own default set today, so this is
+ * currently belt-and-braces. It is stated explicitly because the isolation is a
+ * property we owe our users, not one we want to silently inherit from an
+ * upstream default that could change: an automation browser must never be able
+ * to reach - or offer to reset - the owner's password store.
+ */
+export const KEYCHAIN_ISOLATION_CHROME_ARGS = [
+  "--use-mock-keychain",
+  "--password-store=basic",
+] as const;
+
+export function buildTransportArgs(): string[] {
+  const args = ["-y", "chrome-devtools-mcp@latest"];
+
+  const autoConnect = process.env.CHROME_DEVTOOLS_AXI_AUTO_CONNECT === "1";
+  const browserUrl = process.env.CHROME_DEVTOOLS_AXI_BROWSER_URL;
+  const userDataDir = process.env.CHROME_DEVTOOLS_AXI_USER_DATA_DIR;
+  const channel = process.env.CHROME_DEVTOOLS_AXI_CHANNEL?.trim();
+  const executablePath =
+    process.env.CHROME_DEVTOOLS_AXI_EXECUTABLE_PATH?.trim();
+  const launchesExecutablePath = Boolean(
+    executablePath && !autoConnect && !browserUrl,
+  );
+
+  if (autoConnect) {
+    // Chrome 144+ built-in remote debugging via chrome://inspect/#remote-debugging.
+    // Connects to the user's running Chrome - no separate browser launched.
+    args.push("--autoConnect");
+  } else if (browserUrl) {
+    // Connect to an existing Chrome instance - skip --isolated and --headless
+    // since the user manages the browser lifecycle externally.
+    // ws://|wss:// route to --wsEndpoint (direct WebSocket), http(s):// to --browserUrl
+    // (which fetches /json/version to discover the WebSocket URL).
+    const isWs = /^wss?:\/\//i.test(browserUrl);
+    if (isWs) {
+      args.push(`--wsEndpoint=${browserUrl}`);
+      const wsHeaders = process.env.CHROME_DEVTOOLS_AXI_WS_HEADERS;
+      if (wsHeaders) {
+        let parsedHeaders: unknown;
+        try {
+          parsedHeaders = JSON.parse(wsHeaders);
+        } catch {
+          throw new Error("CHROME_DEVTOOLS_AXI_WS_HEADERS must be valid JSON");
+        }
+        if (
+          parsedHeaders === null ||
+          typeof parsedHeaders !== "object" ||
+          Array.isArray(parsedHeaders)
+        ) {
+          throw new Error(
+            "CHROME_DEVTOOLS_AXI_WS_HEADERS must be a JSON object",
+          );
+        }
+        args.push(`--wsHeaders=${wsHeaders}`);
+      }
+    } else {
+      args.push(`--browserUrl=${browserUrl}`);
+    }
+  } else {
+    if (userDataDir) {
+      // Persistent profile — skip --isolated so the profile is preserved.
+      args.push(`--userDataDir=${userDataDir}`);
+    } else {
+      args.push("--isolated");
+    }
+    if (process.env.CHROME_DEVTOOLS_AXI_HEADED !== "1") {
+      args.push("--headless");
+    }
+    // Launch modes only: `--chrome-arg` is ignored when chrome-devtools-mcp
+    // attaches to a browser somebody else started, and that browser's keychain
+    // policy is its owner's to decide, not ours.
+    for (const arg of KEYCHAIN_ISOLATION_CHROME_ARGS) {
+      args.push(`--chrome-arg=${arg}`);
+    }
+    // Launch modes only, like `--chrome-arg`: an attached browser is already
+    // running, so which binary it came from is not ours to choose. This maps
+    // chrome-devtools-mcp's `--executablePath` so a launched browser can be a
+    // Chrome for Testing build rather than the installed Chrome. On macOS a
+    // headless copy of the installed Chrome shares its bundle id, and
+    // LaunchServices may hand the user's clicked links to that windowless
+    // instance; Chrome for Testing registers under its own bundle id.
+    if (launchesExecutablePath) {
+      args.push(`--executablePath=${executablePath}`);
+    }
+  }
+
+  // --channel selects which installed Chrome distribution chrome-devtools-mcp
+  // targets: the running instance --autoConnect attaches to, or the one launched
+  // by default. It is irrelevant when attaching to an explicit endpoint, so it is
+  // omitted in BROWSER_URL/wsEndpoint mode. Validation is left to chrome-devtools-mcp.
+  // chrome-devtools-mcp also declares --channel and --executablePath mutually
+  // exclusive; an explicit binary is more specific than a channel, so it takes
+  // precedence in launch modes, just as an explicit endpoint does above.
+  if (channel && !browserUrl && !launchesExecutablePath) {
+    args.push(`--channel=${channel}`);
+  }
+
+  const extraChromeArgs = process.env.CHROME_DEVTOOLS_AXI_CHROME_ARGS;
+  if (extraChromeArgs) {
+    for (const arg of extraChromeArgs.trim().split(/\s+/)) {
+      args.push(`--chrome-arg=${arg}`);
+    }
+  }
+
+  return args;
+}
+
+/**
+ * Local MCP discovery probes for {@link resolveTransportSpec} and
+ * {@link detectGlobalMcpPath}. Defaults to real filesystem, PATH, and
+ * `npm prefix -g` lookups; injectable for tests.
+ */
+export interface McpPathProbe {
+  existsSync: (path: string) => boolean;
+  getNpmPrefix: () => string | null;
+  /**
+   * Resolve an executable by name on `PATH`. Optional so a probe that omits it
+   * never touches the host's real `PATH`.
+   */
+  findOnPath?: (name: string) => string | null;
+}
+/**
+ * The command and arguments for a stdio-launched chrome-devtools-mcp process.
+ * This stays separate from direct Streamable HTTP selection so callers cannot
+ * accidentally spawn a local MCP process when only a shared URL is configured.
+ */
+export interface TransportSpec {
+  command: string;
+  args: string[];
+}
+
+export interface SessionTerminatingTransport extends Transport {
+  terminateSession(): Promise<void>;
+}
+
+export type ResolvedTransport =
+  | { kind: "http"; url: URL }
+  | { kind: "stdio"; spec: TransportSpec };
+
+/**
+ * A selected MCP transport plus the lifecycle operation that is unique to a
+ * Streamable HTTP session. Stdio transports intentionally omit
+ * `terminateSession`; closing them only tears down their local child process.
+ */
+export interface BridgeTransport {
+  transport: Transport;
+  terminateSession?: () => Promise<void>;
+}
+
+export interface BridgeTransportFactories {
+  createStdio: (spec: TransportSpec) => Transport;
+  createHttp: (url: URL) => SessionTerminatingTransport;
+}
+
+const DEFAULT_MCP_PATH_PROBE: McpPathProbe = {
+  existsSync: (path) => existsSync(path),
+  getNpmPrefix: () => {
+    try {
+      return execSync("npm prefix -g", {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
+    } catch {
+      return null;
+    }
+  },
+  findOnPath: (name) => findExecutableOnPath(name),
+};
+
+function findExecutableOnPath(name: string): string | null {
+  const path = process.env.PATH;
+  if (path === undefined) return null;
+  const dirs = path
+    .split(delimiter)
+    .flatMap((dir) =>
+      dir ? [dir] : process.platform === "win32" ? [] : [process.cwd()],
+    );
+  const names = process.platform === "win32" ? [`${name}.exe`] : [name];
+  for (const dir of dirs) {
+    for (const candidate of names) {
+      const full = join(dir, candidate);
+      try {
+        if (!statSync(full).isFile()) continue;
+        accessSync(
+          full,
+          process.platform === "win32" ? fsConstants.F_OK : fsConstants.X_OK,
+        );
+        return full;
+      } catch {
+        // Not here; keep looking.
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Auto-detect a globally-installed chrome-devtools-mcp by probing
+ * both npm global package layouts: `<prefix>/node_modules/...` (Windows) and
+ * `<prefix>/lib/node_modules/...` (POSIX).
+ *
+ * Returns the resolved path on success, or null if npm is unavailable or the
+ * package isn't installed. Used as a local-mode fallback by
+ * {@link resolveTransportSpec}; see README Configuration for selection order.
+ */
+export function detectGlobalMcpPath(
+  probe: McpPathProbe = DEFAULT_MCP_PATH_PROBE,
+): string | null {
+  const prefix = probe.getNpmPrefix();
+  if (!prefix || prefix.length === 0) return null;
+  const packagePath = [
+    "node_modules",
+    "chrome-devtools-mcp",
+    "build",
+    "src",
+    "bin",
+    "chrome-devtools-mcp.js",
+  ];
+  const candidates = [
+    join(prefix, "lib", ...packagePath),
+    join(prefix, ...packagePath),
+  ];
+  for (const candidate of candidates) {
+    if (probe.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+/**
+ * Resolve the command + args used to spawn the chrome-devtools-mcp transport.
+ *
+ * This resolver intentionally handles only stdio paths. Shared URL + executable
+ * mode is the stdio proxy path and must verify proxy support before spawning:
+ * an incompatible MCP executable could otherwise start a separate local
+ * browser. Local browser arguments are deliberately excluded because the
+ * service owns Chrome's policy. See README Configuration for the supported
+ * dependency and setup.
+ *
+ * See README Configuration for local-mode selection order. Preferring an
+ * installed MCP avoids npx bootstrap overhead and registry access, which can
+ * exceed the bridge's readiness deadline or fail outright on a slow, cold,
+ * offline, or sandboxed system.
+ */
+export function resolveTransportSpec(
+  probe: McpPathProbe = DEFAULT_MCP_PATH_PROBE,
+): TransportSpec {
+  const explicitPath = process.env.CHROME_DEVTOOLS_AXI_MCP_PATH?.trim();
+  const sharedServerUrl =
+    process.env.CHROME_DEVTOOLS_AXI_MCP_SERVER_URL?.trim();
+  if (sharedServerUrl) {
+    if (!explicitPath) {
+      throw new Error(
+        "CHROME_DEVTOOLS_AXI_MCP_SERVER_URL requires CHROME_DEVTOOLS_AXI_MCP_PATH pointing to a chrome-devtools-mcp build with --server-url proxy support",
+      );
+    }
+    let help: string;
+    try {
+      help = execFileSync(process.execPath, [explicitPath, "--help"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 5_000,
+        killSignal: "SIGKILL",
+      });
+    } catch (error) {
+      throw new Error(
+        "Cannot verify --server-url proxy support: CHROME_DEVTOOLS_AXI_MCP_PATH must point to a runnable chrome-devtools-mcp build whose --help succeeds",
+        { cause: error },
+      );
+    }
+    if (!/^\s+--serverUrl\s/m.test(help)) {
+      throw new Error(
+        "CHROME_DEVTOOLS_AXI_MCP_PATH does not advertise --serverUrl in --help; select a chrome-devtools-mcp build with --server-url proxy support",
+      );
+    }
+    return {
+      command: process.execPath,
+      args: [explicitPath, `--server-url=${sharedServerUrl}`],
+    };
+  }
+
+  const mcpArgs = buildTransportArgs();
+  if (!explicitPath) {
+    const pathBinary = probe.findOnPath?.("chrome-devtools-mcp");
+    if (pathBinary) {
+      return { command: pathBinary, args: mcpArgs.slice(2) };
+    }
+  }
+  const mcpPath = explicitPath || detectGlobalMcpPath(probe);
+  if (mcpPath) {
+    // Strip the npx prefix `["-y", "chrome-devtools-mcp@latest"]` — direct
+    // node spawn doesn't need it.
+    return {
+      command: process.execPath,
+      args: [mcpPath, ...mcpArgs.slice(2)],
+    };
+  }
+  return { command: "npx", args: mcpArgs };
+}
+
+function parseSharedServerUrl(value: string): URL {
+  if (!/^https?:\/\//i.test(value)) {
+    throw new Error(
+      "CHROME_DEVTOOLS_AXI_MCP_SERVER_URL must be an absolute http(s) URL",
+    );
+  }
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new Error("unsupported protocol");
+    }
+    return url;
+  } catch (error) {
+    throw new Error(
+      "CHROME_DEVTOOLS_AXI_MCP_SERVER_URL must be an absolute http(s) URL",
+      { cause: error },
+    );
+  }
+}
+
+/**
+ * Select direct Streamable HTTP when only a shared URL is configured.
+ * Supplying MCP_PATH opts into the verified stdio proxy path instead.
+ */
+export function resolveTransport(
+  probe: McpPathProbe = DEFAULT_MCP_PATH_PROBE,
+): ResolvedTransport {
+  const sharedServerUrl =
+    process.env.CHROME_DEVTOOLS_AXI_MCP_SERVER_URL?.trim();
+  if (sharedServerUrl && !process.env.CHROME_DEVTOOLS_AXI_MCP_PATH?.trim()) {
+    return { kind: "http", url: parseSharedServerUrl(sharedServerUrl) };
+  }
+  return { kind: "stdio", spec: resolveTransportSpec(probe) };
+}
+
+/** Preserve the SDK defaults and the MCP usage-statistics opt-out switches. */
+export function buildMcpChildEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): Record<string, string> {
+  const childEnv = getDefaultEnvironment();
+  for (const key of ["CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS", "CI"]) {
+    const value = env[key];
+    if (value !== undefined) childEnv[key] = value;
+  }
+  return childEnv;
+}
+
+const DEFAULT_BRIDGE_TRANSPORT_FACTORIES: BridgeTransportFactories = {
+  createStdio: (spec) =>
+    new StdioClientTransport({ ...spec, env: buildMcpChildEnv() }),
+  createHttp: (url) => new StreamableHTTPClientTransport(url),
+};
+
+/**
+ * Construct the selected transport. Direct HTTP gets a session terminator;
+ * stdio deliberately does not, so shutdown cannot issue a second termination.
+ */
+export function createTransport(
+  selection: ResolvedTransport = resolveTransport(),
+  factories: BridgeTransportFactories = DEFAULT_BRIDGE_TRANSPORT_FACTORIES,
+): BridgeTransport {
+  if (selection.kind === "http") {
+    const transport = factories.createHttp(selection.url);
+    return {
+      transport,
+      terminateSession: () => transport.terminateSession(),
+    };
+  }
+  return { transport: factories.createStdio(selection.spec) };
+}
+
+/**
+ * Close a bridge transport, terminating a direct remote MCP session first.
+ * `Client.close()` delegates to its transport, so this helper closes the
+ * transport exactly once without separately closing the Client.
+ */
+export async function closeBridgeTransport(
+  bridgeTransport: BridgeTransport,
+): Promise<void> {
+  try {
+    await bridgeTransport.terminateSession?.();
+  } finally {
+    await bridgeTransport.transport.close();
+  }
+}
+
+function createBridgeClient(): Client {
+  // Declare the `roots` capability so chrome-devtools-mcp asks us for workspace
+  // roots (via `roots/list`) instead of restricting every file write to the OS
+  // temp directory. `listChanged` lets us update the roots per call.
+  return new Client(
+    { name: "chrome-devtools-axi-bridge", version: "1.0.0" },
+    { capabilities: { roots: { listChanged: true } } },
+  );
+}
+
+/** How long {@link RootsAwareClient.applyRoots} waits for chrome-devtools-mcp to
+ * re-read our roots after a `list_changed` notification before proceeding. The
+ * cap stops a server that never re-reads from wedging the call. */
+const ROOTS_FETCH_WAIT_MS = 2_000;
+
+function toRoots(dirs: string[]): Array<{ uri: string; name: string }> {
+  const seen = new Set<string>();
+  const roots: Array<{ uri: string; name: string }> = [];
+  for (const dir of dirs) {
+    const uri = pathToFileURL(dir).href;
+    if (seen.has(uri)) continue;
+    seen.add(uri);
+    roots.push({ uri, name: basename(dir) || dir });
+  }
+  return roots;
+}
+
+function rootUrisEqual(
+  a: Array<{ uri: string }>,
+  b: Array<{ uri: string }>,
+): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((root, i) => root.uri === b[i]?.uri);
+}
+
+/**
+ * Wrap an MCP {@link Client} so it answers `roots/list` and can renegotiate the
+ * workspace roots on demand. Registers the `roots/list` handler that returns the
+ * current roots, and exposes {@link RootsAwareClient.applyRoots}: it swaps in the
+ * requested directories, fires `roots/list_changed`, and waits for the server to
+ * re-read them (bounded) before returning, so the *next* tool call validates
+ * against the new roots rather than the previous set. A no-op when the roots are
+ * unchanged, so repeated calls in the same directory add no round-trips.
+ */
+export function createRootsAwareBridgeClient(client: Client): RootsAwareClient {
+  let currentRoots: Array<{ uri: string; name: string }> = [];
+  let confirmedRoots: Array<{ uri: string; name: string }> | null = [];
+  let onRootsFetched: {
+    resolve: () => void;
+    reject: (error: unknown) => void;
+  } | null = null;
+  let callQueue = Promise.resolve();
+
+  client.setRequestHandler(ListRootsRequestSchema, () => {
+    const notify = onRootsFetched;
+    onRootsFetched = null;
+    if (notify) {
+      setImmediate(() => {
+        void client.ping().then(notify.resolve, notify.reject);
+      });
+    }
+    return { roots: currentRoots };
+  });
+
+  async function applyRootsNow(dirs: string[]): Promise<void> {
+    const next = toRoots(dirs);
+    if (confirmedRoots && rootUrisEqual(next, confirmedRoots)) return;
+    confirmedRoots = null;
+    currentRoots = next;
+    let waiter:
+      | { resolve: () => void; reject: (error: unknown) => void }
+      | undefined;
+    const fetched = new Promise<void>((resolve, reject) => {
+      waiter = { resolve, reject };
+      onRootsFetched = waiter;
+    });
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        (async () => {
+          await client.notification({
+            method: "notifications/roots/list_changed",
+          });
+          await fetched;
+        })(),
+        new Promise<void>((_resolve, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error("Timed out waiting for roots negotiation")),
+            ROOTS_FETCH_WAIT_MS,
+          );
+        }),
+      ]);
+      confirmedRoots = next;
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      if (onRootsFetched === waiter) onRootsFetched = null;
+    }
+  }
+
+  function enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    const result = callQueue.then(operation);
+    callQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+
+  return {
+    listTools: () => client.listTools(),
+    callTool: (request, roots) =>
+      enqueue(async () => {
+        if (roots) await applyRootsNow(roots);
+        return client.callTool(request);
+      }),
+    close: () => client.close(),
+    applyRoots: (dirs) => enqueue(() => applyRootsNow(dirs)),
+  };
+}
+
+async function closeServer(server: Server): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+export async function runBridge(port = resolveSessionPort()): Promise<void> {
+  // Connect the selected MCP transport before binding the port. In local and
+  // proxy modes this may spawn chrome-devtools-mcp; URL-only shared mode
+  // connects directly to the existing Streamable HTTP endpoint. A same-session
+  // bind race then self-heals: both racers finish booting before listen(), so
+  // the loser's EADDRINUSE exit finds the winner already deep-healthy and
+  // reuses it instead of failing. The trade-off is one wasted startup on a
+  // genuine cross-session collision, a rare and self-correcting path.
+  const bridgeTransport = createTransport();
+  const client = createBridgeClient();
+  const bridgeClient = createRootsAwareBridgeClient(client);
+  await client.connect(bridgeTransport.transport);
+  logBridgeMessage("Connected to chrome-devtools-mcp");
+
+  const sessionName = resolveSessionName();
+  const idleTimeoutMs = resolveIdleTimeoutMs();
+  const idle =
+    idleTimeoutMs > 0
+      ? createIdleTracker(idleTimeoutMs, () => {
+          logBridgeMessage(
+            `No activity for ${idleTimeoutMs}ms (${IDLE_TIMEOUT_ENV}); shutting down`,
+          );
+          void shutdown();
+        })
+      : undefined;
+  const server = createBridgeServer(bridgeClient, sessionName, idle);
+  server.on("error", (error: NodeJS.ErrnoException) => {
+    handleBridgeServerError(error, port);
+  });
+  server.listen(port, "127.0.0.1", () => {
+    writePidFile(port);
+    logBridgeMessage(`Listening on http://127.0.0.1:${port}`);
+    writeReadySignal();
+  });
+
+  let shuttingDown = false;
+  const shutdown = async () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    removePidFile();
+    await closeServer(server);
+    await closeBridgeTransport(bridgeTransport);
+    process.exit(0);
+  };
+
+  // Once a stdio chrome-devtools-mcp (local or proxy) is gone - crashed,
+  // killed, or closed its stdio - the bridge can only answer 503, and nothing
+  // else ends a detached process, so exit instead of lingering. The next
+  // command starts a fresh bridge, as `ensureBridge` already did for one left
+  // unhealthy. A direct Streamable HTTP transport reports close only when we
+  // close it. Our own shutdown closes the transport too; `shuttingDown` keeps
+  // that from logging.
+  client.onclose = () => {
+    if (shuttingDown) return;
+    logBridgeMessage("chrome-devtools-mcp connection closed; shutting down");
+    void shutdown();
+  };
+
+  // Kill our entire process group on exit so chrome-devtools-mcp children
+  // don't survive as orphans. The bridge is spawned with detached:true,
+  // making it a process group leader — all children share our PGID.
+  process.on("exit", () => {
+    removePidFile();
+    try {
+      process.kill(-process.pid, "SIGTERM");
+    } catch {
+      // Already dead or not a group leader
+    }
+  });
+
+  process.on("SIGTERM", () => {
+    void shutdown();
+  });
+  process.on("SIGINT", () => {
+    void shutdown();
+  });
+}
