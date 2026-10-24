@@ -11,7 +11,18 @@ minimumReleaseAge: 10080
 minimumReleaseAgeStrict: true
 minimumReleaseAgeExclude:
   - axi-sdk-js
+  # security-fix releases younger than 7 days, allowed deliberately (re-check after 2026-10-29):
+  - body-parser@2.4.0   # fixes GHSA-27r3-jxmh-p828 (HIGH DoS)
+  - fast-uri@3.1.9      # fixes several host/authority-confusion advisories
 trustPolicy: no-downgrade
+# Exact-version exceptions to the trust-downgrade check. Each needs a written justification.
+trustPolicyExclude:
+  # types-only dev dependency pinned by @types/node@22 (~6.21.0); older release lacks provenance that newer ones have
+  - undici-types@6.21.0
+  # dev-only (mermaid build tooling for lavish-axi), not shipped
+  - langium@3.3.1
+  # lavish-axi runtime dep on the legitimate chokidar 4.x line (newer 5.x majors carry provenance, 4.x never did)
+  - chokidar@4.0.3
 blockExoticSubdeps: true
 
 # Only esbuild may run a dependency build script (it just places a platform binary).
@@ -23,3 +34,7 @@ overrides:
   axi-sdk-js: workspace:*
   # GHSA-p95v-992w-h6c3 (prototype pollution) is fixed in 2.3.1
   "@toon-format/toon@<2.3.1": 2.3.1
+  # GHSA-27r3-jxmh-p828 (body-parser DoS) fixed in 2.4.0
+  "body-parser@>=2.0.0 <2.4.0": 2.4.0
+  # fast-uri host/authority confusion advisories fixed in 3.1.9
+  "fast-uri@>=3.0.0 <3.1.9": 3.1.9

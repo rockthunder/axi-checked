@@ -9,7 +9,8 @@ def split_key(k):
     return base[:i], base[i+1:], k
 
 def load(path):
-    d = yaml.safe_load(open(path, encoding="utf-8"))
+    docs = [x for x in yaml.safe_load_all(open(path, encoding="utf-8")) if x]
+    d = docs[-1]  # pnpm 12 writes a leading env-lockfile document (pnpm self-pin); the workspace is the last one
     snaps = d.get("snapshots", {})
     # map "name@version" (no peer suffix) -> list of full snapshot keys
     by_nv = {}
