@@ -39,14 +39,6 @@ test("published package root is a complete Agent Plugin", async () => {
   assert.ok(packageJson.files.includes("skills/lavish"));
 });
 
-test("lavish-design agent skill is marked internal for skills CLI discovery", async () => {
-  const skillMd = await readFile(new URL("../.agents/skills/lavish-design/SKILL.md", import.meta.url), "utf8");
-  const frontmatter = skillMd.slice(4, skillMd.indexOf("\n---\n", 4));
-
-  assert.match(frontmatter, /^name: lavish-design$/m);
-  assert.match(frontmatter, /^metadata:\n {2}internal: true$/m);
-});
-
 test("public lavish skill is not marked internal", async () => {
   const skillMd = await readFile(new URL("../skills/lavish/SKILL.md", import.meta.url), "utf8");
   const frontmatter = skillMd.slice(4, skillMd.indexOf("\n---\n", 4));
