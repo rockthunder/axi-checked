@@ -1,0 +1,63 @@
+{
+  "name": "@jeffreyhaen/msgraph-axi",
+  "version": "0.2.0",
+  "description": "Agent-ergonomic TOON wrapper for Microsoft Graph — Outlook mail and calendar on top of the CLI for Microsoft 365",
+  "keywords": [
+    "microsoft-graph",
+    "msgraph",
+    "m365",
+    "outlook",
+    "calendar",
+    "axi",
+    "agent",
+    "cli",
+    "toon"
+  ],
+  "license": "MIT",
+  "author": "Jeffrey Haen",
+  "homepage": "https://github.com/jeffreyhaen/msgraph-axi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jeffreyhaen/msgraph-axi.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jeffreyhaen/msgraph-axi/issues"
+  },
+  "type": "module",
+  "bin": {
+    "msgraph-axi": "dist/bin/msgraph-axi.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "SKILL.md",
+    "LICENSE",
+    "assets"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/bin/msgraph-axi.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "dependencies": {
+    "axi-sdk-js": "^0.1.7",
+    "cross-spawn": "^7.0.6"
+  },
+  "devDependencies": {
+    "@types/cross-spawn": "^6.0.6",
+    "@types/node": "20.19.43",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  }
+}
