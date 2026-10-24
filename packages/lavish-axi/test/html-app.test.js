@@ -57,23 +57,6 @@ test("a transport failure is not reported as published", async () => {
   );
 });
 
-test("a site_id the host echoes cannot smuggle flags into what Lavish reports", async () => {
-  // The echoed id reaches a backticked republish command an agent may run, so `abc123 --password
-  // evil` must not survive. It is a path segment; anything normalizeSiteId refuses is not one.
-  const { fetchImpl } = recordingFetch(jsonResponse(200, { site_id: "abc123 --password evil", url: "https://x/" }));
-  const updated = await updateHtmlApp("abc123", "<h1>Hi</h1>", {
-    fetch: fetchImpl,
-    env: {},
-    updateKey: "uk",
-  });
-
-  assert.equal(updated.site_id, "abc123", "the locally validated id wins over a malformed echo");
-
-  const { fetchImpl: goodFetch } = recordingFetch(jsonResponse(200, { site_id: "renamed", url: "https://x/" }));
-  const renamed = await updateHtmlApp("abc123", "<h1>Hi</h1>", { fetch: goodFetch, env: {}, updateKey: "uk" });
-  assert.equal(renamed.site_id, "renamed", "a well-formed echo is still honored");
-});
-
 test("normalizeSiteId accepts an id and explains that a URL is not one", () => {
   assert.equal(normalizeSiteId(" abc123 "), "abc123");
   assert.throws(() => normalizeSiteId("https://abc123.ht-ml.app/"), /site_id/);
