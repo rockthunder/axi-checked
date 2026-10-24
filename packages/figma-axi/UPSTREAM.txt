@@ -1,0 +1,5 @@
+Upstream: https://github.com/ardaatahan/figma-axi
+Commit:   6e69034e355247c35776982c6b4decc3c98512b9
+Date:     2026-08-30T19:34:34-04:00
+Source README: https://github.com/ardaatahan/figma-axi#readme
+Snapshot of tracked files at the commit above. Excluded: .github/ (upstream CI/publish config).
