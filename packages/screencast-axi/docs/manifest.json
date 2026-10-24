@@ -1,0 +1,108 @@
+[
+  {
+    "id": "demo",
+    "title": "From a sentence to a screencast",
+    "description": "Asking for a clip, the scenario that gets written, and the recording it produces - itself recorded by screencast-axi.",
+    "steps": [
+      "Ask for the clip you want",
+      "It writes a scenario and rehearses it",
+      "Then it drives the real app",
+      "Typed the way a person types it",
+      "And the app answers, on camera"
+    ],
+    "width": 880,
+    "height": 520,
+    "durationMs": 21770,
+    "recordedAt": "2026-09-01T01:51:26.906Z",
+    "pace": 1,
+    "formats": [
+      "mp4",
+      "webm",
+      "webp",
+      "gif",
+      "anim.webp"
+    ],
+    "sourceHash": "f6416da477d389b1",
+    "stepsHash": "b00f25fa50644bd0",
+    "recorderVersion": "0.0.0"
+  },
+  {
+    "id": "usecase-anysite",
+    "title": "Any site, any workflow",
+    "description": "Searching Wikipedia, opening an article and jumping to a section - on a site with no special support of any kind.",
+    "steps": [
+      "Start anywhere",
+      "Type the search the way a person would",
+      "Live suggestions, as they arrive",
+      "Open the article",
+      "Then jump to the section that matters"
+    ],
+    "width": 900,
+    "height": 482,
+    "durationMs": 11168,
+    "recordedAt": "2026-09-01T01:52:25.812Z",
+    "pace": 1,
+    "formats": [
+      "mp4",
+      "webm",
+      "webp",
+      "gif",
+      "anim.webp"
+    ],
+    "sourceHash": "f57ffdbda5a96384",
+    "stepsHash": "eb3a04137a6819e3",
+    "recorderVersion": "0.0.0"
+  },
+  {
+    "id": "usecase-login",
+    "title": "Recording a sign-in",
+    "description": "Typing credentials into a real login form and landing on the page behind it.",
+    "steps": [
+      "A real login form",
+      "Username, then password",
+      "Submitted for real",
+      "And the page behind it"
+    ],
+    "width": 900,
+    "height": 540,
+    "durationMs": 10598,
+    "recordedAt": "2026-09-01T01:53:10.583Z",
+    "pace": 1,
+    "formats": [
+      "mp4",
+      "webm",
+      "webp",
+      "gif",
+      "anim.webp"
+    ],
+    "sourceHash": "481d768aee25b593",
+    "stepsHash": "3ea29c32b2bdad71",
+    "recorderVersion": "0.0.0"
+  },
+  {
+    "id": "usecase-mobile",
+    "title": "The same workflow, on a phone",
+    "description": "A mobile-shaped take of adding a task, at the device's own pixel density.",
+    "steps": [
+      "The real mobile layout",
+      "Typed on the phone",
+      "And there it is"
+    ],
+    "width": 390,
+    "height": 664,
+    "durationMs": 7499,
+    "recordedAt": "2026-09-01T01:53:30.693Z",
+    "pace": 1,
+    "device": "iPhone 13",
+    "formats": [
+      "mp4",
+      "webm",
+      "webp",
+      "gif",
+      "anim.webp"
+    ],
+    "sourceHash": "e830539e13a17a00",
+    "stepsHash": "2e93a750481e0dee",
+    "recorderVersion": "0.0.0"
+  }
+]

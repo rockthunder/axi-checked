@@ -1,0 +1,5 @@
+Upstream: https://github.com/Valzon/screencast-axi
+Commit:   3e5406690094b79a11b1b153e095ac5779f5412c
+Date:     2026-09-13T08:22:22-04:00
+Source README: https://github.com/Valzon/screencast-axi#readme
+Snapshot of tracked files at the commit above. Excluded: .github/ (upstream CI/publish config).

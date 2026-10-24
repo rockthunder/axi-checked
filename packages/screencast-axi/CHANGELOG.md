@@ -1,0 +1,88 @@
+# Changelog
+
+## [0.1.6](https://github.com/Valzon/screencast-axi/compare/v0.1.5...v0.1.6) (2026-09-13)
+
+
+### Features
+
+* a missing scenario path now names the one you meant ([49dfd9d](https://github.com/Valzon/screencast-axi/commit/49dfd9d45d714ada25e18f0e093aaab09b658869))
+* name the likely id or topic behind a typo ([fd78018](https://github.com/Valzon/screencast-axi/commit/fd78018832c174f902438ba7a8fa81065d309ed8))
+
+
+### Bug Fixes
+
+* catch two mistakes that only surfaced after a full take, and correct the guide ([14b6ae7](https://github.com/Valzon/screencast-axi/commit/14b6ae7d6be59fff3aa3323248df2c4a47e11ab9))
+* make a clip the length it claims, and say when it is not ([9b3d20e](https://github.com/Valzon/screencast-axi/commit/9b3d20e89b1c1355f94978bc8bbac850701a534e))
+* refuse nonsense input instead of acting on it, and say what is wrong ([3c34b53](https://github.com/Valzon/screencast-axi/commit/3c34b534225d125a7bc1f7b16c09bd925a629612))
+* stop check deleting a whole clip library, and let both reports fail ([8de8188](https://github.com/Valzon/screencast-axi/commit/8de8188ee1e8ac7c0a302ce0c716388c675427fb))
+* stop the recorder acting on nonsense, destroying clips, and misreporting what it made ([ed7ce03](https://github.com/Valzon/screencast-axi/commit/ed7ce03a50a7e868342323321a52eb993f281f94))
+* stop the recorder reporting sizes and framings it did not use ([989f1aa](https://github.com/Valzon/screencast-axi/commit/989f1aaf5b9af42c9a48f292fd0d507cee00e0dd))
+
+## [0.1.5](https://github.com/Valzon/screencast-axi/compare/v0.1.4...v0.1.5) (2026-09-13)
+
+
+### Features
+
+* a guide topic for the scenario API ([09bc760](https://github.com/Valzon/screencast-axi/commit/09bc760c08e0f2aed1e40bebc6a2c106a627c0b1))
+
+
+### Bug Fixes
+
+* a blank poster, a mangled action log, and a misleading failure report ([10d42bf](https://github.com/Valzon/screencast-axi/commit/10d42bf5891b97b7acee23bf049890559b25ce9b))
+* a clip no longer opens, or takes its poster, from a blank page ([f81c9e1](https://github.com/Valzon/screencast-axi/commit/f81c9e1076881a5f290931488bf66007593a099e))
+* a mistyped scenario path named a module inside this package ([5cb8266](https://github.com/Valzon/screencast-axi/commit/5cb8266b9797b8c61bbcc0957c16ef91ecc6dec8))
+* bound and state how long a take waits for an action ([6c679c9](https://github.com/Valzon/screencast-axi/commit/6c679c9b2aa6c6783de9ce60d755bf549a1b05ac))
+* say where the page was when a step started, not only where it ended ([17b11e3](https://github.com/Valzon/screencast-axi/commit/17b11e39926e5892c67932ffa32e960c4f88b528))
+* the action log no longer mangles the target it is reporting ([1c8acf4](https://github.com/Valzon/screencast-axi/commit/1c8acf467dd76be50faa1940ab7534f3d0f6207c))
+
+## [0.1.4](https://github.com/Valzon/screencast-axi/compare/v0.1.3...v0.1.4) (2026-09-13)
+
+
+### Bug Fixes
+
+* stop disowning clips recorded by path, and stop running the scenario twice ([#8](https://github.com/Valzon/screencast-axi/issues/8)) ([1fa4d71](https://github.com/Valzon/screencast-axi/commit/1fa4d71352cc4d79a6534d0cb64166619835540d))
+
+## [0.1.3](https://github.com/Valzon/screencast-axi/compare/v0.1.2...v0.1.3) (2026-09-11)
+
+
+### Features
+
+* record from a project that has not installed the package ([22d2940](https://github.com/Valzon/screencast-axi/commit/22d2940803a87440320eccb4d09696398a94c6aa))
+
+## [0.1.2](https://github.com/Valzon/screencast-axi/compare/v0.1.1...v0.1.2) (2026-09-11)
+
+
+### Bug Fixes
+
+* find the project's Playwright, and say so when a file imports us ([b6c5f95](https://github.com/Valzon/screencast-axi/commit/b6c5f95c2591af24d696af82e52ac7a4de2086cf))
+* resolve ffmpeg-static from the project, and document an install that works ([8c238e0](https://github.com/Valzon/screencast-axi/commit/8c238e072d5934e10586515aa24d565aeeedbfeb))
+
+## [0.1.1](https://github.com/Valzon/screencast-axi/compare/v0.1.0...v0.1.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* load TypeScript scenarios when installed the documented way ([f3d9b1c](https://github.com/Valzon/screencast-axi/commit/f3d9b1c10bc049cc6e1a5d6ff3c5ab3598f12491))
+
+## 0.1.0 (2026-09-10)
+
+
+### Features
+
+* config, scenario discovery and the manifest ([8c6f386](https://github.com/Valzon/screencast-axi/commit/8c6f386e5711cf60dea0161fbcdaea940b651901))
+* devices, duration targeting and multi-page tours ([fbd82b0](https://github.com/Valzon/screencast-axi/commit/fbd82b028c8e9b81c35e79f272d2e796b850c414))
+* it records ([7c23160](https://github.com/Valzon/screencast-axi/commit/7c23160a881270f4dfd5b1060f2894668f82dc6e))
+* lift the recorder core and add the flag contract ([e58e59c](https://github.com/Valzon/screencast-axi/commit/e58e59c983053dd69dd4d937ba7acf62e631bd94))
+* looping WebP output, and a README demo recorded by the tool itself ([c59f4ef](https://github.com/Valzon/screencast-axi/commit/c59f4efb82b65046f33ed0b501907f5784beff0b))
+* show what a scenario does, in a window or in writing ([7af848d](https://github.com/Valzon/screencast-axi/commit/7af848d770c96e7402e885c05f4ccaa42b16e77b))
+* sign in once by hand, then record anything behind it ([6d01d64](https://github.com/Valzon/screencast-axi/commit/6d01d643236be0d46ba96f6b55cada462d88077e))
+* tell the whole story in the README demo ([6d861a1](https://github.com/Valzon/screencast-axi/commit/6d861a1b540699b378f842e836ec8383562042b7))
+* the read-only half of the command surface ([f06b69a](https://github.com/Valzon/screencast-axi/commit/f06b69a15cfb991e25a487499e0322ee7e8b57b3))
+
+
+### Bug Fixes
+
+* keep release-please in 0.x until 1.0 is a deliberate call ([a7bed99](https://github.com/Valzon/screencast-axi/commit/a7bed99e7748133cf13bd846c99ec9432ac960cd))
+* make the first release 0.1.0, not 1.0.0 ([57c9d79](https://github.com/Valzon/screencast-axi/commit/57c9d799cb261e14861a954a957f08f999b67159))
+* phone clips were recording the page in a corner of an empty frame ([d83083c](https://github.com/Valzon/screencast-axi/commit/d83083cfc8b9efa54d74da4d72be667e492ffd5a))
+* stop recording dead air on sites that never go quiet ([a76ca86](https://github.com/Valzon/screencast-axi/commit/a76ca866ce20263dda5c684b9a1670ead0d3cea5))

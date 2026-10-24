@@ -1,0 +1,637 @@
+# screencast-axi
+
+Record a scripted browser workflow as a watchable clip: a drawn cursor, burnt-in captions, and
+mp4 + webm + a poster out the other end. Built to [AXI](https://github.com/kunchenguid/axi)
+conventions, so an agent can drive it as comfortably as a person can.
+
+<picture>
+  <source srcset="docs/demo.anim.webp" type="image/webp">
+  <img src="docs/demo.gif" alt="Three acts: a prompt asking for a clip, the scenario that gets written, and the recording it produces in a real app." width="640">
+</picture>
+
+<sup>The ask, the scenario that came back, and the take it produced - itself recorded by this tool,
+from [`demo/scenarios/demo.ts`](demo/scenarios/demo.ts). Re-record it with `pnpm demo`.</sup>
+
+[![npm](https://img.shields.io/npm/v/screencast-axi)](https://www.npmjs.com/package/screencast-axi)
+
+## Install
+
+Two ways, and which one fits depends on how often you record.
+
+**Recording regularly** - install it in the project, so the commands are short and your editor has
+the types:
+
+```sh
+pnpm add -D screencast-axi playwright tsx
+pnpm exec playwright install chromium
+```
+
+pnpm 11 refuses to run a dependency's install script until you allow it, and `tsx` brings
+`esbuild`, which needs its script to place a binary. Run `pnpm approve-builds` and pick `esbuild`,
+or put the same thing in `pnpm-workspace.yaml`:
+
+```yaml
+allowBuilds:
+  esbuild: true
+```
+
+**A one-off, or a repo that should not carry the tool** - run it through `npx` and install nothing
+in the project at all:
+
+```sh
+npx -y -p screencast-axi -p playwright -p tsx screencast-axi record ./scenarios/product-tour.ts
+```
+
+The one rule that makes the second form work: a scenario imports only **types** from the package.
+`import type` is erased when the file is compiled, so nothing is resolved from your project at
+runtime - which is what an npx cache cannot provide. `scaffold` writes files that way already. A
+runtime import (`import { defineScenario } from "screencast-axi"`) resolves from _your_ project
+and needs the first form.
+
+`tsx` is what lets Node read a TypeScript scenario. Skip it only if you write scenarios as `.mjs`.
+
+To let an agent drive it, add the skill as well:
+
+```sh
+npx skills add Valzon/screencast-axi --skill screencast-axi -g
+```
+
+## Quick start
+
+No config needed. Point it at any site:
+
+```sh
+pnpm exec screencast-axi scaffold product-tour --url https://example.com
+# fill in the run() body
+pnpm exec screencast-axi rehearse ./scenarios/product-tour.ts
+pnpm exec screencast-axi record   ./scenarios/product-tour.ts
+```
+
+`rehearse` runs the scenario without encoding, so a stale selector surfaces in seconds rather than
+a minute - and the failure comes back with the URL it reached, a screenshot, and what each part of
+the selector actually matched.
+
+A clip recorded by path is a first-class clip: the manifest records which file it came from, so
+`list`, `show`, `check` and a later `record <id>` all find it without a config listing it. Adding
+a config later is what puts it in `record --all`.
+
+`screencast-axi guide scripting` lists every director method with its options, which is the one
+page worth reading before writing a `run()` body.
+
+A scenario is TypeScript, and a plain object:
+
+```ts
+import type { Scenario } from "screencast-axi";
+
+export default {
+  id: "product-tour",
+  title: "A three-stop tour",
+  description: "The pages that matter, in order.",
+  steps: ["Where the work lives", "How it gets organised", "And what comes out"],
+
+  async run(d) {
+    await d.tour([
+      { path: "/", step: 0, scroll: 0.6 },
+      { path: "/features", step: 1, scroll: 0.5 },
+      { path: "/pricing", step: 2 },
+    ]);
+  },
+} satisfies Scenario;
+```
+
+`satisfies` keeps full typing - `d` is a `Director`, and a typo such as `d.gotoo` fails the
+typecheck with a suggestion. Each line in `steps` goes on screen once, in order. The same array
+becomes the burnt-in caption and the manifest's step list, so the written workflow cannot drift
+from the recorded one - a take that skips a line fails.
+
+`defineScenario` still exists for a scenario exported under a name rather than as the default.
+
+## Prerequisites
+
+| Piece       | Required | How it is found                                                      |
+| ----------- | -------- | -------------------------------------------------------------------- |
+| Node        | >= 20    |                                                                      |
+| Chromium    | yes      | Playwright downloads it                                              |
+| `ffmpeg`    | yes      | `$SCREENCAST_FFMPEG`, then an installed `ffmpeg-static`, then `PATH` |
+| WebP poster | optional | ffmpeg's `libwebp`, else `cwebp`, else a PNG poster                  |
+
+ffmpeg is not bundled: it is 80MB+ per platform, and _which_ build you have matters - many builds
+(Homebrew's among them) ship without `libwebp`, which is why the poster has a fallback chain
+rather than one hard requirement. If you would rather not install it system-wide,
+`pnpm add -D ffmpeg-static` and the cascade finds it.
+
+**Platforms:** macOS and Linux are tested, including in CI. Windows is intended to work but is
+**unverified** - the known risks are argument quoting in spawned ffmpeg filter strings, path
+separators inside those arguments, and Chrome's lock on a persistent profile directory.
+
+## What the tool does
+
+The clips below were produced by this repo - the scenarios are in
+[`demo/scenarios/`](demo/scenarios/), and `pnpm demo:usecases` re-records them.
+
+### Point it at any site and describe the workflow
+
+There is no integration to write: no plugin for the site, no fixtures, no test IDs added to the
+page. A scenario names what to do, and the recorder does it.
+
+> _"Record a clip of searching Wikipedia for Ada Lovelace, opening the article, and jumping to the
+> Work section. Around ten seconds."_
+
+<picture>
+  <source srcset="docs/usecase-anysite.anim.webp" type="image/webp">
+  <img src="docs/usecase-anysite.gif" alt="Searching Wikipedia, watching live suggestions arrive, opening the article and jumping to a section." width="480">
+</picture>
+
+<sup>The whole scenario is [50 lines](demo/scenarios/anysite.ts), most of it narration and
+comments.</sup>
+
+### Records a sign-in, or skips past one
+
+> _"Sign in to our staging dashboard and record a 15 second clip of creating an invoice. I will
+> do the login myself."_
+
+A login is an ordinary workflow as far as the recorder is concerned: a field, a field, a button.
+It is worth filming, because it is the part of a product most demos skip.
+
+<picture>
+  <source srcset="docs/usecase-login.anim.webp" type="image/webp">
+  <img src="docs/usecase-login.gif" alt="A real login form being filled in and submitted, landing on the page behind it." width="460">
+</picture>
+
+For a real app you usually want the opposite - the clip should open already through the door
+rather than spend its first seconds on a form. So signing in becomes a one-time human step, and
+this is what that looks like from your side:
+
+> **A real Chrome window opens on your screen, at the site you are recording.**
+> Sign in there however that site wants: password, SSO, a magic link, two-factor, a passkey.
+> Then **close the window** - closing it is the signal that you are done.
+> Nothing is ever typed into the terminal, and no credential passes through this package. The
+> session is saved into a Chrome profile on your machine, and every later take reuses it.
+
+An agent can open that window for you rather than making you retype a command, but it cannot sign
+in for you and will not try: without `--interactive` it stops and says a person is needed, and it
+refuses outright where no window could appear, such as a headless CI box. The wait is bounded, so
+it can never hang.
+
+For a login you can script, an `AuthStrategy` object in the config does the same job in typed code
+([worked example](demo/auth/form-login.ts)). Either way it runs before recording starts, so none
+of it lands in the clip.
+
+### Renders at phone and tablet viewports
+
+> _"Record our onboarding on an iPhone, portrait, about fifteen seconds - I want it for the app
+> store listing."_
+
+A device preset does more than set a width. Its `isMobile` and `hasTouch` flags decide whether the
+site's own `@media (hover: none)` and touch rules apply at all, and it carries the right user
+agent - so this is the mobile layout the site actually serves, not a desktop squeezed narrow.
+Playwright ships 140+ presets; `--viewport 390x844` covers the rest.
+
+```sh
+screencast-axi record onboarding --device "iPhone 13" --orientation portrait
+```
+
+<picture>
+  <source srcset="docs/usecase-mobile.anim.webp" type="image/webp">
+  <img src="docs/usecase-mobile.gif" alt="The same workflow recorded in a portrait phone viewport." width="240">
+</picture>
+
+<sup>The video is captured at the CSS viewport - 390x664 here - because Playwright composites the
+page into the video canvas without scaling up. `deviceScaleFactor` still changes how the page
+renders and which images it picks, but not the resolution of the recording.</sup>
+
+### Shows you what it is doing
+
+A scenario is arbitrary code driving a real browser, often one signed into your own account, so
+"is this safe to run" deserves a better answer than "read the TypeScript".
+
+```sh
+screencast-axi rehearse <id> --headed
+```
+
+`--headed` runs it in a real window instead of hidden, so you can watch the whole thing. It does
+not change the output - the clip is identical either way - so it costs nothing but the window.
+
+Watching answers the question once, though, and only while you sit there. So a rehearsal also
+prints what it did, in a form you can read before running, diff after an edit, and keep:
+
+```
+$ screencast-axi rehearse usecase-login
+
+rehearsed: usecase-login
+duration_s: 10.8
+pace: 1
+viewport: 900x540
+steps[4]: A real login form,"Username, then password",Submitted for real,And the page behind it
+hosts[1]: the-internet.herokuapp.com
+performed[10]:
+  - at_s: 0.2
+    did: goto
+    target: "https://the-internet.herokuapp.com/login"
+  - at_s: 1.8
+    did: waitFor
+    target: #username
+  - at_s: 1.8
+    did: step
+    detail: A real login form
+  - at_s: 2.9
+    did: step
+    detail: "Username, then password"
+  - at_s: 2.9
+    did: type
+    target: #username
+    detail: tomsmith
+  - at_s: 4.3
+    did: type
+    target: #password
+    detail: •••••••• (20 chars)
+  - at_s: 7.1
+    did: step
+    detail: Submitted for real
+  - at_s: 7.1
+    did: click
+    target: "button[type=submit]"
+  - at_s: 8.2
+    did: waitFor
+    target: h2
+  - at_s: 8.8
+    did: step
+    detail: And the page behind it
+```
+
+Note the password: a field the log would otherwise leak records its shape and nothing else.
+
+`hosts` is the short answer to where it went, taken from the pages the browser actually reached -
+so a redirect or a navigation buried in `setup()` shows up too. A list of one host reads very
+differently from a list of nine.
+
+### Says what it produced, not what it was asked for
+
+A page is laid out at the viewport you give; the file is capped and scaled to
+`deliverables.width`. Those are different numbers whenever the viewport is larger, so a run
+reports both - `viewport` is the layout, `output` is the file.
+
+The clip is also bounded to the take it describes, so the duration in the manifest is the duration
+of the mp4. And because the pace is solved from a single measuring pass, a slow site can still blow
+the budget: a finished take that misses its target by more than a tenth says so, rather than
+printing the target and the result on adjacent lines in silence.
+
+A scenario can carry its own `viewport` or `device`, which is how `record --all` gives each clip
+its own size.
+
+### Waits for a bounded time, and says how long it waited
+
+A rehearsal waits `timeouts.rehearseMs` per action and a take waits `timeouts.actionMs`, eight
+and fifteen seconds by default. Neither is Playwright's thirty-second default: a wrong selector
+is something you hit repeatedly while writing a scenario, and half a minute of waiting plus the
+browser launch behind it is most of a minute per attempt.
+
+That difference cuts both ways, so a rehearsal is not a guarantee. A merely slow selector can
+fail a rehearsal and still record; one that depends on where the page happens to be can pass a
+rehearsal and hang a take. A take that fails on a timeout says which budget applied and how to
+raise it.
+
+A failure also reports where the page was when the step _started_, not only where it ended up.
+They differ whenever a step clicked into a navigation, and the screenshot is always of the second
+page - which can look perfectly healthy and send you looking in the wrong place.
+
+### Aims a clip at a length
+
+```sh
+screencast-axi record tour --duration 30s
+```
+
+One measuring pass, then it solves for the pace that lands near the target. A take is
+`fixed + pace x scalable` - the site's own waits do not get slower because the recorder does - so
+the solve uses the measured split rather than assuming everything scales. Pace is clamped to a
+watchable range, and a target outside it is reported rather than obeyed.
+
+The measuring pass is the most expensive thing `record` does, so its result is kept and reused:
+rehearse first and the take that follows needs one browser pass instead of two. Anything that
+would change the timing - an edit to the scenario or its narration, another viewport, device or
+origin, a new version of the recorder - measures again rather than trusting a stale number. The
+output says which happened.
+
+A scenario can carry its own `targetDurationMs` so the length lives with the clip; `--duration`
+overrides it, and an explicit `--pace` overrides both.
+
+### Emits what the destination needs
+
+mp4 and webm every time, plus a poster frame. `--gif` and `--webp` add looping images for the
+places a `<video>` does not render - a README, an npm page, an email. Every image on this page is
+one of them. See [Output formats](#output-formats) for what each costs.
+
+Drag-and-drop is handled too, including the HTML5 protocol that Chromium will not synthesise from
+mouse events - the interaction most likely to look like a teleport if a recorder cuts corners.
+
+## Why a script, not a screen recorder
+
+A screencast is a performance with a script, not a recording of work being done. What makes one
+watchable is a set of constants - a settle before each click, an eased pointer glide, a consistent
+hold on each caption - and constants only help if you can run the same thing again and get the
+same thing back. A scenario file survives a product change, gets reviewed in a pull request, and
+can be re-cut at a different length without re-deciding anything.
+
+## Recording a page behind a login
+
+`profileAuth()` needs no code for the site you are recording. A person runs this once:
+
+```sh
+pnpm exec screencast-axi auth login --interactive
+```
+
+A browser opens, they sign in however that site wants and close the window. The session lives in
+a persistent Chrome profile, every take reuses it, and `auth check` tells you when it has expired.
+
+Also shipped: `storageStateAuth({ path })` for a portable session file, and
+`basicAuth({ username, password })` for staging environments. Anything else is an `AuthStrategy`
+object written in the config - typed and debuggable rather than a shelled-out script.
+
+> A scenario that creates or drags something **writes to whatever it is pointed at**. Prefer
+> read-only scenarios against production, or point at staging.
+
+## Output formats
+
+Every take produces an mp4, a webm and a poster, all three encoded at once. Looping images are
+opt-in with `--gif` and `--webp`, for the places a `<video>` does not render - a README, an npm
+page, an email.
+
+The webm is offered first and the mp4 is the fallback, so the webm only earns its place by being
+the smaller of the two. That is what `webm.crf` is tuned for: measured on a 1280x800 ten-second
+take, the webm is 796 KB against the mp4's 1,056 KB, with no visible difference on text. VP9 and
+h264 do not share a CRF scale, so the two numbers in the config are not comparable to each other.
+
+Measured on a real 16.7s app screencast, all at 800px and 15fps:
+
+| Format        | Size     | vs mp4 |
+| ------------- | -------- | ------ |
+| mp4 (h264)    | 182 KB   | 1x     |
+| animated WebP | 944 KB   | 5.2x   |
+| GIF           | 2,034 KB | 11.2x  |
+
+Prefer WebP where it renders: same content, roughly half the bytes, full colour rather than a
+256-entry palette. Quality is not the deciding factor for flat app UI - 192 colours plus dithering
+keeps small text legible - but a GIF has no controls, no seeking, no poster frame, cannot be
+paused, and ignores `prefers-reduced-motion`. It is an export, not a storage format.
+
+## Configuration
+
+Optional. `screencast.config.ts` at the repo root, found by walking up from the working directory:
+
+`init` writes one with a type-only import, so it loads in a project that has not installed the
+package. Import `defineConfig` instead if you would rather have the call, and `profileAuth` and
+the other auth strategies are real imports either way - a config that uses one needs the package
+installed beside it.
+
+```ts
+import type { ScreencastConfig } from "screencast-axi";
+import { profileAuth } from "screencast-axi";
+
+export default {
+  baseUrl: "http://localhost:3000",
+  scenarios: ["scenarios/*.ts"],
+  outDir: "public/demos",
+  viewport: { width: 1440, height: 900 },
+
+  browser: { profileDir: ".screencast/profile" },
+  auth: profileAuth({ signedInSelector: "[data-testid=user-menu]" }),
+
+  overlay: {
+    accent: "#4f46e5",
+    // Page chrome that should not end up in the footage.
+    hideSelectors: ["#cookie-banner", "nextjs-portal"],
+  },
+
+  timeouts: {
+    actionMs: 15_000, // per action during a take
+    rehearseMs: 8_000, // per action during a rehearsal, which exists to fail fast
+    settleMs: 2_500, // ceiling on waiting for the network to go quiet after a goto
+  },
+} satisfies ScreencastConfig;
+```
+
+Relative paths resolve against the config file, never the shell's working directory, so a command
+means the same thing from anywhere in a repo.
+
+The config is read at runtime, so its shapes are checked when it loads: a `scenarios` written as a
+string rather than an array used to be walked character by character, globbing from the filesystem
+root.
+
+## Exit codes
+
+`check` and `doctor` answer a question, and the answer can be that something is wrong. They exit
+non-zero when they report a failure, so a CI step running either of them means something. `record`
+does the same when a scenario in a batch fails - the rest of the batch is still recorded, and the
+report lists what did and did not.
+
+`check --fix-orphans` deletes what no scenario claims. It refuses while the manifest is unreadable,
+because an unreadable manifest claims nothing and every clip would look unclaimed; `--dry-run`
+lists what would go.
+
+## Reading the manifest
+
+Every take writes `manifest.json` beside the clips. A site can read it at build time without
+pulling in Playwright or a browser:
+
+```ts
+import { readManifest, clipFilesFor } from "screencast-axi/manifest";
+```
+
+That entry point has no runtime dependencies at all.
+
+## Command reference
+
+<!-- reference:start -->
+
+Every command takes `--help`. Flags always come after the command:
+`screencast-axi <command> [args] [flags]`. An unknown flag is a usage error rather than
+something quietly ignored.
+
+#### `init`
+
+Write a config, a scenarios directory and a gitignore entry.
+
+```sh
+screencast-axi init
+```
+
+| Flag          | What it does                      |
+| ------------- | --------------------------------- |
+| `--out <dir>` | Where clips should be written.    |
+| `--url <url>` | Base URL for the site you record. |
+| `--force`     | Overwrite an existing config.     |
+
+#### `scaffold`
+
+Write a scenario skeleton so the boilerplate is never what goes wrong.
+
+```sh
+screencast-axi scaffold <id>
+```
+
+| Flag              | What it does                              |
+| ----------------- | ----------------------------------------- |
+| `--url <url>`     | Base URL the scenario opens.              |
+| `--title <text>`  | Human title for the clip.                 |
+| `--dir <path>`    | Where to write it.                        |
+| `--tour <value>`  | Write an n-stop page walkthrough instead. |
+| `--device <name>` | Playwright device preset.                 |
+
+#### `rehearse`
+
+Run a scenario without recording, and print every action it took.
+
+```sh
+screencast-axi rehearse <id|path...>
+```
+
+| Flag                | What it does                              |
+| ------------------- | ----------------------------------------- |
+| `--config <path>`   | Path to a config file.                    |
+| `--base-url <url>`  | Override the scenario's base URL.         |
+| `--pace <value>`    | Speed multiplier; lower is faster.        |
+| `--device <name>`   | Playwright device preset.                 |
+| `--viewport <WxH>`  | Explicit size, e.g. 390x844.              |
+| `--orientation <o>` | portrait or landscape.                    |
+| `--headed`          | Watch it happen in a real browser window. |
+| `--auth <name>`     | Named auth strategy from the config.      |
+| `--no-auth`         | Record signed out.                        |
+
+#### `record`
+
+Run a scenario for real and encode the clip.
+
+```sh
+screencast-axi record <id|path...>
+```
+
+| Flag                   | What it does                                                          |
+| ---------------------- | --------------------------------------------------------------------- |
+| `--config <path>`      | Path to a config file.                                                |
+| `--base-url <url>`     | Override the scenario's base URL.                                     |
+| `--pace <value>`       | Speed multiplier; lower is faster.                                    |
+| `--device <name>`      | Playwright device preset.                                             |
+| `--viewport <WxH>`     | Explicit size, e.g. 390x844.                                          |
+| `--orientation <o>`    | portrait or landscape.                                                |
+| `--headed`             | Watch it happen in a real browser window.                             |
+| `--auth <name>`        | Named auth strategy from the config.                                  |
+| `--no-auth`            | Record signed out.                                                    |
+| `--duration <30s>`     | Aim for this length, e.g. 30s (measures first, then solves for pace). |
+| `--out <dir>`          | Output directory.                                                     |
+| `--all`                | Record every scenario the config lists.                               |
+| `--if-changed`         | Skip clips already recorded from the current scenario.                |
+| `--full`               | Include the full action log.                                          |
+| `--gif`                | Also emit a looping GIF.                                              |
+| `--webp`               | Also emit a looping WebP (half a GIF's size).                         |
+| `--loop-width <value>` | Width of the looping formats.                                         |
+| `--loop-fps <value>`   | Frame rate of the looping formats.                                    |
+| `--keep-raw`           | Keep the raw capture for inspection.                                  |
+
+#### `list`
+
+Every scenario, with what needs re-shooting.
+
+```sh
+screencast-axi list
+```
+
+| Flag              | What it does                              |
+| ----------------- | ----------------------------------------- |
+| `--config <path>` | Path to a config file.                    |
+| `--full`          | Every field, not the four-column summary. |
+| `--stale`         | Only what needs re-shooting.              |
+| `--tag <name>`    | Filter by scenario tag. Repeatable.       |
+
+#### `show`
+
+One clip in full: files, sizes, narration, when it was shot.
+
+```sh
+screencast-axi show <id>
+```
+
+| Flag              | What it does                   |
+| ----------------- | ------------------------------ |
+| `--config <path>` | Path to a config file.         |
+| `--full`          | Include untruncated step text. |
+
+#### `check`
+
+Cross-reference the manifest, the scenarios and the files on disk.
+
+```sh
+screencast-axi check
+```
+
+| Flag              | What it does                                                       |
+| ----------------- | ------------------------------------------------------------------ |
+| `--config <path>` | Path to a config file.                                             |
+| `--fix-orphans`   | Delete manifest entries and media with no scenario behind them.    |
+| `--dry-run`       | With --fix-orphans, list what would be deleted and delete nothing. |
+
+#### `doctor`
+
+Check everything a recording needs, in one pass.
+
+```sh
+screencast-axi doctor
+```
+
+| Flag              | What it does           |
+| ----------------- | ---------------------- |
+| `--config <path>` | Path to a config file. |
+
+#### `setup`
+
+Install the browser; name anything you must install yourself.
+
+```sh
+screencast-axi setup
+```
+
+| Flag              | What it does               |
+| ----------------- | -------------------------- |
+| `--browsers-only` | Install Chromium and stop. |
+
+#### `auth`
+
+Sign in by hand once, or check the saved session still works.
+
+```sh
+screencast-axi auth login|check [name]
+```
+
+| Flag                  | What it does                                                 |
+| --------------------- | ------------------------------------------------------------ |
+| `--config <path>`     | Path to a config file.                                       |
+| `--base-url <url>`    | Site to sign in to.                                          |
+| `--interactive`       | Required for `login`: opens a real browser.                  |
+| `--save-state <path>` | Write a Playwright storage state here as well.               |
+| `--headed`            | Show the browser for `check`.                                |
+| `--wait <5m>`         | How long `login` waits for the window to close (default 5m). |
+
+#### `guide`
+
+Topic-sized guidance, pulled one topic at a time.
+
+```sh
+screencast-axi guide [topic]
+```
+
+_No flags._
+<!-- reference:end -->
+
+## Contributing
+
+```sh
+pnpm install
+pnpm build && pnpm test && pnpm typecheck && pnpm format
+```
+
+`skills/screencast-axi/SKILL.md` is generated from `src/skill.ts` - edit the generator, run
+`pnpm build:skill`, and commit the result. CI fails if the two drift, and the generator throws if
+the stub grows past its character cap.
+
+## License
+
+MIT
