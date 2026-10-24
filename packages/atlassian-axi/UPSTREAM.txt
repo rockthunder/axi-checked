@@ -1,0 +1,5 @@
+Upstream: https://github.com/emilchristensen/atlassian-axi
+Commit:   bfbbb668b8bc08440bf613a0db4217a8f8ff917f
+Date:     2026-08-18T10:55:16+02:00
+Source README: https://github.com/emilchristensen/atlassian-axi#readme
+Snapshot of tracked files at the commit above. Excluded: .github/ (upstream CI/publish config), packages/benchmark/ (benchmark package excluded; contains jira-axi + confluence-axi).
