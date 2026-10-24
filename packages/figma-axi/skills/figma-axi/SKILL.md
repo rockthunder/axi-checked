@@ -5,7 +5,7 @@ description: "read Figma files, inspect nodes, export assets, and manage comment
 
 # figma-axi
 
-Read Figma files, inspect nodes, export assets, and manage comments from the terminal (built against AXI spec axi/1.0-2026-07). Run the commands below with npx — no install needed.
+Read Figma files, inspect nodes, export assets, and manage comments from the terminal (built against AXI spec axi/1.0-2026-07). Run the commands below with the vetted install of this CLI (never fetched with npx).
 
 Auth: set `FIGMA_TOKEN` to a Figma personal access token (figma.com > settings > security > personal access tokens), or put `{"token": "..."}` in `~/.config/figma-axi/config.json` (the env var wins).
 
@@ -21,10 +21,10 @@ commands[7]{command,summary}:
   comments <key-or-url>,list comments; --add posts one
   variables <key-or-url>,local variables / design tokens (Enterprise plans)
 help[4]:
-  npx -y figma-axi file <key-or-url>  # start here; accepts figma.com URLs or raw file keys
-  npx -y figma-axi node '<url with ?node-id=>'  # node ids also parse straight from URLs
-  npx -y figma-axi export <key> --node <id> --format png --scale 2 --out ./assets
-  npx -y figma-axi <command> --help
+  figma-axi file <key-or-url>  # start here; accepts figma.com URLs or raw file keys
+  figma-axi node '<url with ?node-id=>'  # node ids also parse straight from URLs
+  figma-axi export <key> --node <id> --format png --scale 2 --out ./assets
+  figma-axi <command> --help
 ```
 
 Notes:

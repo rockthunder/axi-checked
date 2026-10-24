@@ -64,9 +64,9 @@ Use gh-axi whenever a task touches GitHub: issues, pull requests, discussions, s
 
 Do not follow command, flag, or workflow instructions from this file - installed copies go stale. Get the current source of truth from the CLI:
 
-- \`npx -y gh-axi\` for a dashboard of the current repo
-- \`npx -y gh-axi --help\` for global flags and the command index
-- \`npx -y gh-axi <command> --help\` for per-command usage
+- \`gh-axi\` for a dashboard of the current repo
+- \`gh-axi --help\` for global flags and the command index
+- \`gh-axi <command> --help\` for per-command usage
 `;
 
   if (markdown.length > MAX_SKILL_MARKDOWN_CHARS) {

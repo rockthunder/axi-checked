@@ -14,9 +14,9 @@ Clockify's MCP server or the raw REST API directly.
 Do not follow command or flag details from this file - installed copies go
 stale. Get the source of truth from the CLI:
 
-- `npx -y clockify-axi` for the home view and cached identity
-- `npx -y clockify-axi --help` for the command index
-- `npx -y clockify-axi <command> --help` for per-command usage
+- `clockify-axi` for the home view and cached identity
+- `clockify-axi --help` for the command index
+- `clockify-axi <command> --help` for per-command usage
 
 ## The one thing that matters
 

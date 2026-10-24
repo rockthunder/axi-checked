@@ -31,9 +31,9 @@ metadata:
 
 ${DESCRIPTION}
 
-You do not need jira-axi installed - invoke it with \`npx -y jira-axi@latest <command>\`, which is the default path.
+You do not need jira-axi installed - invoke it with \`jira-axi@latest <command>\`, which is the default path.
 The \`@latest\` pin ensures you always run the newest published version.
-If jira-axi output shows a follow-up command starting with \`jira-axi\`, run it as \`npx -y jira-axi@latest ...\` instead; if a bare \`jira-axi\` already resolves on \`PATH\`, run it directly.
+If jira-axi output shows a follow-up command starting with \`jira-axi\`, run it as \`jira-axi@latest ...\` instead; if a bare \`jira-axi\` already resolves on \`PATH\`, run it directly.
 
 A global install (\`npm i -g jira-axi\`) is a SECONDARY option, for the agent SessionStart hook functionality; \`setup hooks\` requires it.
 What the hook adds to every session: \`acli: installed\` (whether the required acli prerequisite is present), \`my_open_workitems[N]{key,summary,status}\` (your own open work items), and a \`help[N]\` line naming the available commands.

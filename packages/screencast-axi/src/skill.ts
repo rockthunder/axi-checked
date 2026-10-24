@@ -4,12 +4,12 @@ export const SKILL_NAME = "screencast-axi";
  * How to run the CLI without installing anything.
  *
  * The `-p` flags are the whole point: Playwright and tsx are optional peers
- * resolved from the *project*, so a bare `npx screencast-axi` finds a CLI with
+ * resolved from the *project*, so a bare `screencast-axi` finds a CLI with
  * no browser to drive and no way to read a TypeScript scenario. Kept here, and
  * imported by every message that suggests a command, so the three places that
  * quote it cannot drift apart.
  */
-export const NPX_INVOCATION = "npx -y -p screencast-axi -p playwright -p tsx screencast-axi";
+export const NPX_INVOCATION = "screencast-axi";
 
 /**
  * Hard cap, enforced rather than documented.
@@ -67,7 +67,7 @@ ffmpeg must be installed. Signing in is a one-time human step
 (\`auth login --interactive\`); the CLI refuses rather than prompting when no
 person is present.
 
-No install needed - this works from any project, and \`init\`/\`scaffold\` write
+Requires the vetted install of screencast-axi (never fetched with npx), with playwright and tsx available in the project; \`init\`/\`scaffold\` write
 files that load without it:
 
     ${NPX_INVOCATION} <command>

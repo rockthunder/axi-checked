@@ -11,7 +11,7 @@ import {
 } from "../src/skill.js";
 
 function skillCommandText(text) {
-  return text.replaceAll("`reactive-axi", "`npx -y reactive-axi");
+  return text.replaceAll("`reactive-axi", "`reactive-axi");
 }
 
 test("createSkillMarkdown emits valid frontmatter naming the reactive-editor skill", () => {
@@ -159,10 +159,10 @@ test("createSkillMarkdown does not leak live session state", () => {
 test("createSkillMarkdown uses non-interactive npx commands", () => {
   const md = createSkillMarkdown();
 
-  assert.match(md, /`npx -y reactive-axi <project-dir>`/);
+  assert.match(md, /`reactive-axi <project-dir>`/);
   assert.match(md, /If reactive-axi output shows a follow-up command starting with `reactive-axi`/);
-  assert.match(md, /run it as `npx -y reactive-axi/);
-  assert.doesNotMatch(md, /`npx reactive-axi/);
+  assert.match(md, /run it as `reactive-axi/);
+  assert.doesNotMatch(md, /`reactive-axi/);
   assert.doesNotMatch(md, /Run `reactive-axi/);
 });
 

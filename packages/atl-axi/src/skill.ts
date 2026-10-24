@@ -27,11 +27,11 @@ Use atl-axi whenever a task touches Jira: issues, JQL search, sprints, story poi
 
 Do not follow command, flag, or workflow instructions from this file - installed copies go stale. Get the current source of truth from the CLI:
 
-- \`npx -y atl-axi\` for your open issues (and the issue of the current git branch)
-- \`npx -y atl-axi --help\` for the command index
-- \`npx -y atl-axi <command> --help\` for per-command flags and examples
+- \`atl-axi\` for your open issues (and the issue of the current git branch)
+- \`atl-axi --help\` for the command index
+- \`atl-axi <command> --help\` for per-command flags and examples
 
-Authentication is a one-time, user-performed step: \`<token-command> | npx -y atl-axi auth login --site <site>.atlassian.net --email <atlassian-email> --token-stdin\`. Never ask for the token in chat or pass it as an argument.
+Authentication is a one-time, user-performed step: \`<token-command> | atl-axi auth login --site <site>.atlassian.net --email <atlassian-email> --token-stdin\`. Never ask for the token in chat or pass it as an argument.
 `;
   if (markdown.length > MAX_SKILL_MARKDOWN_CHARS) {
     throw new Error(`generated SKILL.md is ${markdown.length} chars; keep it under ${MAX_SKILL_MARKDOWN_CHARS}`);

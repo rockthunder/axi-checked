@@ -34,7 +34,7 @@ export function extractCommandsBlock(): string {
  * Render the installable SKILL.md for the homebrew-axi skill. The body is
  * built from the same shared guidance the CLI prints (description and
  * top-level help), rewriting invocations to non-interactive
- * `npx -y homebrew-axi ...` so the CLI comes along on demand.
+ * `homebrew-axi ...` so the CLI comes along on demand.
  *
  * @returns full SKILL.md contents including YAML frontmatter
  */
@@ -50,9 +50,9 @@ author: ${SKILL_AUTHOR}
 
 ${DESCRIPTION}
 
-You do not need homebrew-axi installed globally - invoke it with \`npx -y homebrew-axi <command>\`.
+You do not need homebrew-axi installed globally - invoke it with \`homebrew-axi <command>\`.
 If homebrew-axi output shows a follow-up command starting with \`homebrew-axi\`, run it as
-\`npx -y homebrew-axi ...\` instead.
+\`homebrew-axi ...\` instead.
 
 homebrew-axi shells out to the local [\`brew\`](https://brew.sh) CLI for installed-package state
 (\`outdated\`, \`installed\`) and calls the public formulae.brew.sh JSON API for catalog data
@@ -71,7 +71,7 @@ anything. For those operations, ask the user to run \`brew\` directly.
 
 ## Workflow
 
-1. Run \`npx -y homebrew-axi\` with no arguments to see outdated installed packages at a glance.
+1. Run \`homebrew-axi\` with no arguments to see outdated installed packages at a glance.
 2. Look up a formula with \`info <name>\`, or a cask with \`info <name> --cask\`.
 3. Drill into dependencies with \`deps <name>\`.
 4. Find a package by name with \`search "<query>"\`.
@@ -83,12 +83,9 @@ anything. For those operations, ask the user to run \`brew\` directly.
 ${extractCommandsBlock()}
 \`\`\`
 
-Installed copies also inherit the SDK built-in \`update\` command.
-Run \`homebrew-axi update --check\` to compare the installed version with npm, or
-\`homebrew-axi update\` to upgrade.
-When using \`npx -y homebrew-axi\`, npx already resolves the package on demand.
+Self-update is disabled in this build; updates are distributed through your organisation's internal repository.
 
-Run \`npx -y homebrew-axi --help\` for global flags, or \`npx -y homebrew-axi <command> --help\`
+Run \`homebrew-axi --help\` for global flags, or \`homebrew-axi <command> --help\`
 for per-command usage.
 
 ## Tips

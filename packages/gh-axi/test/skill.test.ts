@@ -78,12 +78,12 @@ describe("createSkillMarkdown", () => {
     expect(markdown.length).toBeLessThanOrEqual(MAX_SKILL_MARKDOWN_CHARS);
     expect(body).toContain(DESCRIPTION);
     expect(body).toMatch(/whenever a task touches GitHub/i);
-    expect(body).toContain("npx -y gh-axi");
-    expect(body).toContain("npx -y gh-axi --help");
-    expect(body).toContain("npx -y gh-axi <command> --help");
+    expect(body).toContain("gh-axi");
+    expect(body).toContain("gh-axi --help");
+    expect(body).toContain("gh-axi <command> --help");
     expect(body).toMatch(/stale/i);
     expect(body).toMatch(
-      /- `npx -y gh-axi <command> --help` for per-command usage\n$/,
+      /- `gh-axi <command> --help` for per-command usage\n$/,
     );
   });
 

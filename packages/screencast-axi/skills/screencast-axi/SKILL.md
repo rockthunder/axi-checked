@@ -43,10 +43,10 @@ ffmpeg must be installed. Signing in is a one-time human step
 (`auth login --interactive`); the CLI refuses rather than prompting when no
 person is present.
 
-No install needed - this works from any project, and `init`/`scaffold` write
+Requires the vetted install of screencast-axi (never fetched with npx), with playwright and tsx available in the project; `init`/`scaffold` write
 files that load without it:
 
-    npx -y -p screencast-axi -p playwright -p tsx screencast-axi <command>
+    screencast-axi <command>
 
 `setup` downloads the browser once. For regular use,
 `pnpm add -D screencast-axi playwright tsx` shortens it to

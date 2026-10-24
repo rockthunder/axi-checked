@@ -13,11 +13,11 @@ Agent-ergonomic Azure DevOps CLI (AXI). Auth stays with Azure CLI (`az login` / 
 ## Invoke
 
 ```sh
-npx -y ado-axi
-npx -y ado-axi pr list --status active
-npx -y ado-axi pr view <id>
-npx -y ado-axi ref list
-npx -y ado-axi run list --branch main
+ado-axi
+ado-axi pr list --status active
+ado-axi pr view <id>
+ado-axi ref list
+ado-axi run list --branch main
 ```
 
 ## Targeting

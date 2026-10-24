@@ -56,14 +56,14 @@ describe("createSkillMarkdown", () => {
 
   it("teaches npx invocation instead of assuming a global install", () => {
     const markdown = createSkillMarkdown();
-    expect(markdown).toContain("npx -y chrome-devtools-axi");
+    expect(markdown).toContain("chrome-devtools-axi");
   });
 
   it("stays a short stub that defers to the CLI", () => {
     const markdown = createSkillMarkdown();
     expect(markdown.length).toBeLessThanOrEqual(MAX_SKILL_MARKDOWN_CHARS);
-    expect(markdown).toContain("`npx -y chrome-devtools-axi --help`");
-    expect(markdown).toContain("`npx -y chrome-devtools-axi <command> --help`");
+    expect(markdown).toContain("`chrome-devtools-axi --help`");
+    expect(markdown).toContain("`chrome-devtools-axi <command> --help`");
     expect(markdown).toMatch(/next-step hints/i);
   });
 

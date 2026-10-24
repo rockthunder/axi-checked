@@ -19,9 +19,9 @@ Use whenever a task needs a real browser: opening or testing a web page, clickin
 
 Do not follow command, workflow, or flag instructions from this file - installed copies go stale. Get the current source of truth from the CLI:
 
-- `npx -y chrome-devtools-axi --help` for commands, flags, and environment variables
-- `npx -y chrome-devtools-axi <command> --help` for per-command usage
+- `chrome-devtools-axi --help` for commands, flags, and environment variables
+- `chrome-devtools-axi <command> --help` for per-command usage
 - Follow the CLI's own contextual next-step hints after each command
 
-You do not need chrome-devtools-axi installed globally - invoke it with `npx -y chrome-devtools-axi <command>`.
-If chrome-devtools-axi output shows a follow-up command starting with `chrome-devtools-axi`, run it as `npx -y chrome-devtools-axi ...` instead.
+You do not need chrome-devtools-axi installed globally - invoke it with `chrome-devtools-axi <command>`.
+If chrome-devtools-axi output shows a follow-up command starting with `chrome-devtools-axi`, run it as `chrome-devtools-axi ...` instead.

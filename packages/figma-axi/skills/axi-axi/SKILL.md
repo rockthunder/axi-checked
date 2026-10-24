@@ -5,7 +5,7 @@ description: "Build a new AXI (Agent eXperience Interface) CLI — scaffold a co
 
 # axi-axi
 
-A token-efficient CLI that helps agents build AXI-compliant CLIs (spec axi/1.0-2026-07). Run the commands below with npx — no install needed. Pull only the slice of the spec you need, when you need it, instead of loading the whole spec into context.
+A token-efficient CLI that helps agents build AXI-compliant CLIs (spec axi/1.0-2026-07). Run the commands below with the vetted install of this CLI (never fetched with npx). Pull only the slice of the spec you need, when you need it, instead of loading the whole spec into context.
 
 ```
 principles[10]{num,id,rule}:
@@ -20,14 +20,14 @@ principles[10]{num,id,rule}:
   9,disclosure,"Follow output with 2-4 relevant, parameterized next-step suggestions"
   10,consistent-help,"Every subcommand answers --help: flags, defaults, and 2-3 examples"
 golden-path[4]:
-  1. npx -y axi-axi new <name> --dir <path>  scaffold a compliant AXI project
-  2. npx -y axi-axi checklist --phase implement  keep the rules in view while coding
-  3. npx -y axi-axi principles show <id>  when a rule needs detail
-  4. npx -y axi-axi validate "<cmd>" --dir <path>  check compliance before shipping
+  1. axi-axi new <name> --dir <path>  scaffold a compliant AXI project
+  2. axi-axi checklist --phase implement  keep the rules in view while coding
+  3. axi-axi principles show <id>  when a rule needs detail
+  4. axi-axi validate "<cmd>" --dir <path>  check compliance before shipping
 help[3]:
-  npx -y axi-axi new my-tool --dir ./my-tool
-  npx -y axi-axi principles show token-output
-  npx -y axi-axi checks list
+  axi-axi new my-tool --dir ./my-tool
+  axi-axi principles show token-output
+  axi-axi checks list
 ```
 
 Every command supports `--help` (flags, defaults, examples). Exit codes: 0 success/no-op, 1 error, 2 usage error. All output is TOON on stdout.

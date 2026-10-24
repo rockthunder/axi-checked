@@ -18,7 +18,7 @@ raw `wrangler` for Cloudflare operations: TOON output, structured errors with
 ## Setup
 
 Install with `pnpm add -g @simkimsia/cloudflare-axi`, or run it without installing
-via `npx -y @simkimsia/cloudflare-axi`. The README's Install section covers working
+via `@simkimsia/cloudflare-axi`. The README's Install section covers working
 from a clone.
 
 It wraps [`wrangler`](https://developers.cloudflare.com/workers/wrangler/), which must be installed and logged in

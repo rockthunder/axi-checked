@@ -29,7 +29,7 @@ export const COMMAND_ROWS = [
 
 /**
  * Shared body of the home view; `tool` is how commands are written
- * ("figma-axi" live, "npx -y figma-axi" in the static skill).
+ * ("figma-axi" live, "figma-axi" in the static skill).
  */
 export function homeBody(tool: string): string {
   const table = emitList("commands", COMMAND_ROWS, ["command", "summary"]);
@@ -83,14 +83,14 @@ export function renderSkill(): string {
   const body = [
     "# figma-axi",
     "",
-    `${DESCRIPTION[0]!.toUpperCase()}${DESCRIPTION.slice(1)} (built against AXI spec ${SPEC_VERSION}). Run the commands below with npx — no install needed.`,
+    `${DESCRIPTION[0]!.toUpperCase()}${DESCRIPTION.slice(1)} (built against AXI spec ${SPEC_VERSION}). Run the commands below with the vetted install of this CLI (never fetched with npx).`,
     "",
     "Auth: set `FIGMA_TOKEN` to a Figma personal access token (figma.com > settings > security > personal access tokens), or put `{\"token\": \"...\"}` in `~/.config/figma-axi/config.json` (the env var wins).",
     "",
     "Every `<key-or-url>` accepts a raw Figma file key or a full figma.com URL; a URL's `?node-id=` fragment is picked up automatically, and node ids may use either `12:34` or `12-34` form.",
     "",
     "```",
-    homeBody("npx -y figma-axi"),
+    homeBody("figma-axi"),
     "```",
     "",
     "Notes:",
