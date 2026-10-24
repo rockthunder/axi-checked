@@ -12,9 +12,8 @@ metadata:
 
 Agent-ergonomic Confluence Cloud CLI over the REST API directly, with token-efficient TOON output and OAuth 3LO + API-token auth.
 
-You do not need confluence-axi installed - invoke it with `confluence-axi@latest <command>`, which is the default path.
-The `@latest` pin ensures you always run the newest published version.
-If confluence-axi output shows a follow-up command starting with `confluence-axi`, run it as `confluence-axi@latest ...` instead; if a bare `confluence-axi` already resolves on `PATH`, run it directly.
+confluence-axi must be installed from your organisation's vetted AXI repository; do not download it on demand.
+If confluence-axi output shows a follow-up command starting with `confluence-axi`, run it as `confluence-axi ...` instead; if a bare `confluence-axi` already resolves on `PATH`, run it directly.
 
 A global install (`npm i -g confluence-axi`) is a SECONDARY option, for the agent SessionStart hook functionality; `setup hooks` requires it.
 What the hook adds to every session: `site: <site>` (which Confluence site the credential targets), `auth: ok (<mode>)` (the active auth mode and whether it works), `spaces[N]{key,name,type,id}` (the reachable spaces with the keys and ids other commands take), and a `help[N]` line naming the available commands.

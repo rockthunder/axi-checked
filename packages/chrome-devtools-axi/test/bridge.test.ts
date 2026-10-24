@@ -50,6 +50,15 @@ import {
   setSelectedPageId,
 } from "../src/selected-page.js";
 
+// The corporate build refuses attach modes (AUTO_CONNECT / BROWSER_URL) unless explicitly allowed;
+// most tests in this file exercise them, so allow them here. test/hardening.test.ts covers the refusal.
+beforeEach(() => {
+  process.env.CHROME_DEVTOOLS_AXI_ALLOW_ATTACH = "1";
+});
+afterEach(() => {
+  delete process.env.CHROME_DEVTOOLS_AXI_ALLOW_ATTACH;
+});
+
 const RECONNECT_NOTICE_LINE =
   "Note: the browser was restarted or reconnected since the last call. Page ids have changed. Call list_pages to see open pages.";
 

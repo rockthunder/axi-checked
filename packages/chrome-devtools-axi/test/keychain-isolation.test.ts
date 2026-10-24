@@ -4,6 +4,14 @@ import {
   buildTransportArgs,
 } from "../src/bridge.js";
 
+// Attach modes need the explicit opt-in in the corporate build (see test/hardening.test.ts).
+beforeEach(() => {
+  process.env.CHROME_DEVTOOLS_AXI_ALLOW_ATTACH = "1";
+});
+afterEach(() => {
+  delete process.env.CHROME_DEVTOOLS_AXI_ALLOW_ATTACH;
+});
+
 /**
  * Regression cover for the "Keychain Not Found" modal.
  *

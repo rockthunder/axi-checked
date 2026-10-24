@@ -50,7 +50,7 @@ author: ${SKILL_AUTHOR}
 
 ${DESCRIPTION}
 
-You do not need homebrew-axi installed globally - invoke it with \`homebrew-axi <command>\`.
+homebrew-axi must be installed from your organisation's vetted AXI repository; do not download it on demand.
 If homebrew-axi output shows a follow-up command starting with \`homebrew-axi\`, run it as
 \`homebrew-axi ...\` instead.
 

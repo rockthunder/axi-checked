@@ -26,6 +26,7 @@ import { ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { execFileSync, execSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import {
   createServer,
   type IncomingMessage,
@@ -34,6 +35,7 @@ import {
 } from "node:http";
 import {
   accessSync,
+  chmodSync,
   constants as fsConstants,
   existsSync,
   mkdirSync,
@@ -53,7 +55,9 @@ import {
 import { pathToFileURL } from "node:url";
 import {
   AMBIENT_REQUEST_HEADER,
+  assertAttachModeAllowed,
   BRIDGE_PORT_IN_USE_EXIT_CODE,
+  BRIDGE_TOKEN_HEADER,
   PAGE_IDENTITY_CHANGED_ERROR,
   resolveBridgeScript,
 } from "./bridge-script.js";
@@ -174,10 +178,20 @@ export async function isBridgeTargetReachable(
   }
 }
 
-function writePidFile(port: number): void {
+export function writePidFile(port: number, token?: string): void {
   const pidFile = resolveSessionPidFile();
-  mkdirSync(dirname(pidFile), { recursive: true });
-  writeFileSync(pidFile, JSON.stringify({ pid: process.pid, port }));
+  mkdirSync(dirname(pidFile), { recursive: true, mode: 0o700 });
+  writeFileSync(
+    pidFile,
+    JSON.stringify({ pid: process.pid, port, ...(token ? { token } : {}) }),
+    { mode: 0o600 },
+  );
+  try {
+    // writeFileSync's mode only applies when the file is created; tighten a pre-existing one too.
+    chmodSync(pidFile, 0o600);
+  } catch {
+    // Best effort (e.g. Windows ACLs).
+  }
 }
 
 /**
@@ -607,14 +621,40 @@ export function isIdleActivity(req: IncomingMessage): boolean {
   return isRequestAllowed(req) && req.headers[AMBIENT_REQUEST_HEADER] !== "1";
 }
 
+/**
+ * True when no token is required (unit tests, legacy callers) or the request
+ * presents the bridge's secret in {@link BRIDGE_TOKEN_HEADER}. Constant-time.
+ */
+export function isRequestAuthorized(
+  req: IncomingMessage,
+  token: string | undefined,
+): boolean {
+  if (token === undefined) return true;
+  const header = req.headers[BRIDGE_TOKEN_HEADER];
+  const presented = Array.isArray(header) ? header[0] : header;
+  if (typeof presented !== "string") return false;
+  const a = Buffer.from(presented);
+  const b = Buffer.from(token);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 export function createBridgeServer(
   client: BridgeClient,
   sessionName?: string,
   idle?: IdleTracker,
+  token?: string,
 ): Server {
   return createServer((req, res) => {
     const end = idle?.begin();
-    if (end) res.once("close", () => end(isIdleActivity(req)));
+    const authorized = isRequestAuthorized(req, token);
+    if (end) res.once("close", () => end(authorized && isIdleActivity(req)));
+    if (!authorized) {
+      logBridgeMessage(
+        `Rejected unauthenticated request: ${req.method ?? ""} ${req.url ?? ""}`,
+      );
+      writeJson(res, 403, { error: "Forbidden" });
+      return;
+    }
     void handleBridgeRequest(
       client,
       req,
@@ -699,6 +739,7 @@ export const MCP_PRIVACY_ARGS = [
 ] as const;
 
 export function buildTransportArgs(): string[] {
+  assertAttachModeAllowed();
   const args = ["-y", `chrome-devtools-mcp@${PINNED_MCP_VERSION}`, ...MCP_PRIVACY_ARGS];
 
   const autoConnect = process.env.CHROME_DEVTOOLS_AXI_AUTO_CONNECT === "1";
@@ -1240,12 +1281,14 @@ export async function runBridge(port = resolveSessionPort()): Promise<void> {
           void shutdown();
         })
       : undefined;
-  const server = createBridgeServer(bridgeClient, sessionName, idle);
+  // Per-run secret: required on every request, stored only in the owner-only PID file.
+  const token = randomBytes(32).toString("hex");
+  const server = createBridgeServer(bridgeClient, sessionName, idle, token);
   server.on("error", (error: NodeJS.ErrnoException) => {
     handleBridgeServerError(error, port);
   });
   server.listen(port, "127.0.0.1", () => {
-    writePidFile(port);
+    writePidFile(port, token);
     logBridgeMessage(`Listening on http://127.0.0.1:${port}`);
     writeReadySignal();
   });

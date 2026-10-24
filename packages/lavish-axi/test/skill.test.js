@@ -133,6 +133,6 @@ test("createSkillMarkdown omits setup guidance", () => {
 test("createSkillMarkdown never tells agents to fetch the tool with npx (vetted install only)", () => {
   const md = createSkillMarkdown();
 
-  assert.match(md, /`lavish-axi <html-file>`/);
+  assert.match(md, /lavish-axi must be installed from your organisation's vetted AXI repository/);
   assert.doesNotMatch(md, /npx/);
 });

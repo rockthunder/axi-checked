@@ -12,7 +12,7 @@ metadata:
 
 Reactive-Axi lets a human annotate a live, running React, Vue, or Svelte app (Vite, Next.js, Create React App, TanStack Start, or plain Vite+Vue/Svelte) directly in the browser and send feedback to a coding agent, with every click resolved to the exact source file and line where the framework's own dev tooling makes that possible. Run `reactive-axi <project-dir>` to open a review session, then `reactive-axi poll <project-dir>` to wait for feedback.
 
-You do not need reactive-axi installed globally - invoke it with `reactive-axi <project-dir>`.
+reactive-axi must be installed from your organisation's vetted AXI repository; do not download it on demand.
 If reactive-axi output shows a follow-up command starting with `reactive-axi`, run it as `reactive-axi ...` instead.
 In restricted subprocess sandboxes, CI, or agent harnesses where `npx -y` exits opaquely (for example with status 216), use an already-installed copy directly: `node "$(npm root)/reactive-axi/dist/cli.mjs" <project-dir>` for a local install, `node "$(npm root -g)/reactive-axi/dist/cli.mjs" <project-dir>` for a global install, or the bare `reactive-axi <project-dir>` bin after installing once.
 

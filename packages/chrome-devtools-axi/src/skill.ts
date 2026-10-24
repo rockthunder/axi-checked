@@ -63,7 +63,7 @@ Do not follow command, workflow, or flag instructions from this file - installed
 - \`chrome-devtools-axi <command> --help\` for per-command usage
 - Follow the CLI's own contextual next-step hints after each command
 
-You do not need chrome-devtools-axi installed globally - invoke it with \`chrome-devtools-axi <command>\`.
+chrome-devtools-axi must be installed from your organisation's vetted AXI repository; do not download it on demand.
 If chrome-devtools-axi output shows a follow-up command starting with \`chrome-devtools-axi\`, run it as \`chrome-devtools-axi ...\` instead.
 `;
 

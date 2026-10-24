@@ -61,7 +61,7 @@ Do not follow workflow, design, or playbook instructions from this file - instal
 - \`lavish-axi design\` for design-direction priority and current snippets
 - \`lavish-axi playbook <id>\` for focused artifact guidance (\`lavish-axi playbook\` lists ids)
 
-You do not need lavish-axi installed globally - invoke it with \`lavish-axi <html-file>\`.
+lavish-axi must be installed from your organisation's vetted AXI repository; do not download it on demand.
 If lavish-axi output shows a follow-up command starting with \`lavish-axi\`, run it as \`lavish-axi ...\` instead.
 
 ## Request

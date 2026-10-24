@@ -9,7 +9,9 @@ import { dirname } from "node:path";
 import { AxiError } from "axi-sdk-js";
 import {
   AMBIENT_REQUEST_HEADER,
+  assertAttachModeAllowed,
   BRIDGE_PORT_IN_USE_EXIT_CODE,
+  BRIDGE_TOKEN_HEADER,
   PAGE_IDENTITY_CHANGED_ERROR,
   resolveBridgeScript,
 } from "./bridge-script.js";
@@ -68,6 +70,8 @@ export class CdpError extends AxiError {
 interface PidInfo {
   pid: number;
   port: number;
+  /** Per-bridge secret; requests without it are refused (see BRIDGE_TOKEN_HEADER). */
+  token?: string;
 }
 
 function readPidFile(
@@ -83,6 +87,14 @@ function readPidFile(
   } catch {
     return null;
   }
+}
+
+/** Header carrying the bridge secret from the current session's owner-only PID file. */
+function bridgeAuthHeaders(): Record<string, string> {
+  const token = readPidFile()?.token;
+  return typeof token === "string" && token.length > 0
+    ? { [BRIDGE_TOKEN_HEADER]: token }
+    : {};
 }
 
 function isProcessAlive(pid: number): boolean {
@@ -200,7 +212,10 @@ export async function checkBridgeHealth(
   try {
     const path = opts.deep ? "/health?deep=1" : "/health";
     const timeoutMs = opts.deep ? DEEP_HEALTH_TIMEOUT_MS : HEALTH_TIMEOUT_MS;
-    const resp = await httpGet(port, path, timeoutMs, ambientHeaders(opts));
+    const resp = await httpGet(port, path, timeoutMs, {
+      ...ambientHeaders(opts),
+      ...bridgeAuthHeaders(),
+    });
     const data = JSON.parse(resp);
     if (data.status !== "ok") return false;
     if (
@@ -275,6 +290,14 @@ function isBridgeProcess(pid: number): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Whether it is safe to send signals to `pid` as "our bridge". `ps` identifies the
+ * process on POSIX; Windows has no `ps`, so it keeps the previous behaviour.
+ */
+function canSignalAsBridge(pid: number): boolean {
+  return process.platform === "win32" || isBridgeProcess(pid);
 }
 
 /**
@@ -475,6 +498,18 @@ export async function ensureBridge(
   ) => SpawnedBridge = spawnBridgeProcess,
   notice?: PageIdentityNotice,
 ): Promise<number> {
+  try {
+    assertAttachModeAllowed();
+  } catch (error) {
+    throw new CdpError(
+      error instanceof Error ? error.message : String(error),
+      "VALIDATION_ERROR",
+      [
+        "Unset CHROME_DEVTOOLS_AXI_AUTO_CONNECT / CHROME_DEVTOOLS_AXI_BROWSER_URL to use an isolated headless browser",
+        "Or set CHROME_DEVTOOLS_AXI_ALLOW_ATTACH=1 if your policy allows driving an existing browser",
+      ],
+    );
+  }
   const sessionName = resolveSessionName();
   const port = resolveSessionPort(sessionName);
   const pidFile = resolveSessionPidFile(sessionName);
@@ -492,9 +527,13 @@ export async function ensureBridge(
     ) {
       return pidInfo.port;
     }
-    await terminateBridgeProcess(pidInfo.pid, {
-      killProcessGroup: isBridgeProcess(pidInfo.pid),
-    });
+    // Only ever signal a process that really is our bridge. A stale PID file whose
+    // PID was recycled by an unrelated process must not get that process killed.
+    if (canSignalAsBridge(pidInfo.pid)) {
+      await terminateBridgeProcess(pidInfo.pid, {
+        killProcessGroup: isBridgeProcess(pidInfo.pid),
+      });
+    }
   }
 
   // MCP page ids reset with a new process; a leftover session id would
@@ -624,7 +663,7 @@ async function postTool(
     "/call",
     body,
     opts.timeoutMs,
-    ambientHeaders(opts),
+    { ...ambientHeaders(opts), ...bridgeAuthHeaders() },
   );
   return parseCallResponse(resp);
 }
@@ -948,6 +987,7 @@ export async function stopBridge(): Promise<boolean> {
   const pidInfo = readPidFile();
   if (!pidInfo) return false;
   if (!isProcessAlive(pidInfo.pid)) return false;
+  if (!canSignalAsBridge(pidInfo.pid)) return false; // stale PID file; never signal a non-bridge process
   await terminateBridgeProcess(pidInfo.pid, {
     killProcessGroup: isBridgeProcess(pidInfo.pid),
   });

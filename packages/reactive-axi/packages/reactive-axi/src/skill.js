@@ -57,7 +57,7 @@ metadata:
 
 ${skillCommandText(home.description)}
 
-You do not need reactive-axi installed globally - invoke it with \`reactive-axi <project-dir>\`.
+reactive-axi must be installed from your organisation's vetted AXI repository; do not download it on demand.
 If reactive-axi output shows a follow-up command starting with \`reactive-axi\`, run it as \`reactive-axi ...\` instead.
 In restricted subprocess sandboxes, CI, or agent harnesses where \`npx -y\` exits opaquely (for example with status 216), use an already-installed copy directly: \`node "$(npm root)/reactive-axi/dist/cli.mjs" <project-dir>\` for a local install, \`node "$(npm root -g)/reactive-axi/dist/cli.mjs" <project-dir>\` for a global install, or the bare \`reactive-axi <project-dir>\` bin after installing once.
 
