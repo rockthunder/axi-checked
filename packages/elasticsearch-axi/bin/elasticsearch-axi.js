@@ -209,6 +209,10 @@ function buildContext(flags) {
   const resolvedEndpoint = flags.url ?? process.env.ELASTICSEARCH_URL ?? process.env.ES_URL ?? cloudEndpoint ?? "";
   const rawEndpoint = (resolvedEndpoint || "http://localhost:9200").replace(/\/+$/, "");
   const { cleanEndpoint, basicFromUrl } = extractBasicAuthFromUrl(rawEndpoint);
+  if (!/^https?:\/\//i.test(cleanEndpoint)) usageError("the endpoint must be an http:// or https:// URL", ["Pass --url https://host:9200 (other schemes such as file:// are refused)"]);
+  if (flags.insecure && process.env.ELASTICSEARCH_AXI_ALLOW_INSECURE !== "1") {
+    usageError("--insecure (skip TLS certificate verification) is disabled unless ELASTICSEARCH_AXI_ALLOW_INSECURE=1 is set in the environment", ["Fix the certificate chain (NODE_EXTRA_CA_CERTS does not apply to curl: use CURL_CA_BUNDLE) instead of disabling verification"]);
+  }
   const apiKey = flags.api_key ?? process.env.ELASTIC_API_KEY ?? process.env.ES_API_KEY ?? "";
   const user = flags.user ?? process.env.ELASTIC_USERNAME ?? basicFromUrl.user ?? "";
   const password = flags.password ?? process.env.ELASTIC_PASSWORD ?? basicFromUrl.password ?? "";
@@ -260,7 +264,8 @@ function encodeApiKey(value) {
 }
 
 function runCurl(method, urlPath, body, context, options = {}) {
-  const args = ["-s", "-S", "-X", method, `${context.endpoint}${urlPath}`, "-H", `Content-Type: ${options.ndjson ? "application/x-ndjson" : "application/json"}`, "-H", "Accept: application/json", "-w", "\n%{http_code}"];
+  // --proto: curl also speaks file://, gopher://, dict://, ftp://, ... Only http(s) may ever be requested.
+  const args = ["-s", "-S", "--proto", "=http,https", "-X", method, `${context.endpoint}${urlPath}`, "-H", `Content-Type: ${options.ndjson ? "application/x-ndjson" : "application/json"}`, "-H", "Accept: application/json", "-w", "\n%{http_code}"];
   // Credentials must not appear on the command line (visible to other local users via the process list):
   // hand the Authorization header to curl as a config file on stdin instead.
   let curlConfig;
@@ -989,6 +994,7 @@ function deleteObject(parsed, context) {
   if (!name) usageError("--name is required", ["Run `elasticsearch-axi delete --kind index --name <name> --confirm <name>`"]);
   if (!DELETE_KINDS.has(kind)) usageError(`unknown delete kind ${toonScalar(kind)}`, [`valid kinds: ${[...DELETE_KINDS].join(", ")}`]);
   if (parsed.flags.confirm !== name) usageError("destructive delete requires --confirm matching --name", [`Run \`elasticsearch-axi delete --kind ${kind} --name ${name} --confirm ${name} --execute\` after review`]);
+  if (/[*,?]/.test(name) || name === "_all") usageError("delete takes exactly one concrete name; wildcards, lists and _all are refused", ["Delete objects one by one by their exact name"]);
   const spec = deleteSpec(kind, name, parsed.flags, context);
   if (!parsed.flags.execute) {
     print(["delete:", "  dry_run: true", `  kind: ${kind}`, `  name: ${toonScalar(name)}`, "  method: DELETE", `  path: ${toonScalar(spec.path)}`, formatHelp([`Run \`elasticsearch-axi delete --kind ${kind} --name ${name} --confirm ${name} --execute\` to delete after review`])].join("\n"));
