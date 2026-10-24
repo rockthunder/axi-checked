@@ -1,9 +1,0 @@
-packages:
-  - "."
-
-allowBuilds:
-  esbuild: true
-
-pnpm:
-  onlyBuiltDependencies:
-    - esbuild

@@ -57,9 +57,6 @@
     "turndown": "^7.2.4",
     "yaml": "^2.9.1"
   },
-  "overrides": {
-    "google-auth-library": "$google-auth-library"
-  },
   "devDependencies": {
     "@types/addressparser": "^1.0.3",
     "@types/diff": "^8.0.0",

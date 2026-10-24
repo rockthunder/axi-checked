@@ -54,6 +54,5 @@
     "typescript": "^7.0.2",
     "vitest": "^5.0.1"
   },
-  "author": "Cristian Mos",
-  "packageManager": "pnpm@10.28.2"
+  "author": "Cristian Mos"
 }

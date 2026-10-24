@@ -2,7 +2,6 @@
   "name": "atlassian-axi-monorepo",
   "version": "0.0.0",
   "private": true,
-  "packageManager": "pnpm@11.1.1",
   "description": "Monorepo for the Atlassian AXI CLIs: jira-axi (acli-backed Jira) and confluence-axi (direct Confluence Cloud REST). The former atlassian-axi package is sunset.",
   "type": "module",
   "repository": {

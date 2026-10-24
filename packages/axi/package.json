@@ -1,7 +1,6 @@
 {
   "name": "axi-repo-tools",
   "private": true,
-  "packageManager": "pnpm@11.1.1",
   "type": "module",
   "scripts": {
     "docs:gen": "node scripts/generate-docs.mjs",
