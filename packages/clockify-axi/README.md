@@ -1,3 +1,5 @@
+> **Vetted copy** of [elliottkan/clockify-axi](https://github.com/elliottkan/clockify-axi) at commit `3334994`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../SOURCES.md). Original: [elliottkan/clockify-axi README](https://github.com/elliottkan/clockify-axi/blob/333499465556b555c4886b1a96623ccc61c004d1/README.md).
+
 # clockify-axi
 
 Clockify's REST API for agents, built to the [AXI](https://axi.md) conventions.

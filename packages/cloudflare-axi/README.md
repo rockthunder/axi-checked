@@ -1,3 +1,5 @@
+> **Vetted copy** of [simkimsia/cloudflare-axi](https://github.com/simkimsia/cloudflare-axi) at commit `5f487ba`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../SOURCES.md). Original: [simkimsia/cloudflare-axi README](https://github.com/simkimsia/cloudflare-axi/blob/5f487ba5da878d5ec237c2e81182d1310537a678/README.md).
+
 # cloudflare-axi
 
 An [AXI](https://axi.md)-compliant wrapper around the

@@ -1,3 +1,5 @@
+> **Vetted copy** of [JarvusInnovations/metabase-axi](https://github.com/JarvusInnovations/metabase-axi) at commit `013acc6`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../SOURCES.md). Original: [JarvusInnovations/metabase-axi README](https://github.com/JarvusInnovations/metabase-axi/blob/013acc64fbfbeed44014bb9ee856095dfab36174/README.md).
+
 <h1 align="center">metabase-axi</h1>
 
 <p align="center">An <a href="https://axi.md">AXI</a>-compliant CLI for <a href="https://www.metabase.com/">Metabase</a> — built for agents.</p>

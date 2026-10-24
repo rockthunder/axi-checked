@@ -1,3 +1,5 @@
+> **Vetted copy** of [Valzon/screencast-axi](https://github.com/Valzon/screencast-axi) at commit `3e54066`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../SOURCES.md). Original: [Valzon/screencast-axi README](https://github.com/Valzon/screencast-axi/blob/3e5406690094b79a11b1b153e095ac5779f5412c/README.md).
+
 # screencast-axi
 
 Record a scripted browser workflow as a watchable clip: a drawn cursor, burnt-in captions, and

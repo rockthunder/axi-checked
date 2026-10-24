@@ -1,3 +1,5 @@
+> **Vetted copy** of [dtabolich/ado-axi](https://github.com/dtabolich/ado-axi) at commit `8c96e95`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../SOURCES.md). Original: [dtabolich/ado-axi README](https://github.com/dtabolich/ado-axi/blob/8c96e95d41d6bbe839c583c7cc18c4453d40b46e/README.md).
+
 # ado-axi
 
 Azure DevOps CLI for agents — designed with [AXI](https://axi.md) (Agent eXperience Interface).

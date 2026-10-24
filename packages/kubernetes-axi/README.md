@@ -1,3 +1,5 @@
+> **Vetted copy** of [thatdudealso/kubernetes-axi](https://github.com/thatdudealso/kubernetes-axi) at commit `c05c686`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../SOURCES.md). Original: [thatdudealso/kubernetes-axi README](https://github.com/thatdudealso/kubernetes-axi/blob/c05c686e02cb0074ccf1ba5284d2941c05e9a54e/README.md).
+
 # kubernetes-axi
 
 Agent-facing Kubernetes operations AXI for discovering, inspecting, deploying,

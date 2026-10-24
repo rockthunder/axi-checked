@@ -1,3 +1,5 @@
+> **Vetted copy** of [thatdudealso/elasticsearch-axi](https://github.com/thatdudealso/elasticsearch-axi) at commit `6a906d4`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../SOURCES.md). Original: [thatdudealso/elasticsearch-axi README](https://github.com/thatdudealso/elasticsearch-axi/blob/6a906d4a369e3d5d295f0caa639ab50b25aac8bf/README.md).
+
 # elasticsearch-axi
 
 Agent-facing Elasticsearch/OpenSearch operations AXI for discovering,

@@ -1,3 +1,5 @@
+> **Vetted copy** of [thatdudealso/aws-axi](https://github.com/thatdudealso/aws-axi) at commit `85f9b4e`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../SOURCES.md). Original: [thatdudealso/aws-axi README](https://github.com/thatdudealso/aws-axi/blob/85f9b4e35180dc5bfd084e735e3e1a9323e0d8c7/README.md).
+
 # aws-axi
 
 Agent-facing AWS operations AXI for discovering, planning, provisioning,

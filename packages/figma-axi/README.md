@@ -1,3 +1,5 @@
+> **Vetted copy** of [ardaatahan/figma-axi](https://github.com/ardaatahan/figma-axi) at commit `6e69034`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../SOURCES.md). Original: [ardaatahan/figma-axi README](https://github.com/ardaatahan/figma-axi/blob/6e69034e355247c35776982c6b4decc3c98512b9/README.md).
+
 # figma-axi
 
 An [AXI](https://axi.md) (Agent eXperience Interface) CLI for the [Figma REST API](https://developers.figma.com/docs/rest-api/): read files, inspect nodes, export assets, and manage comments from the terminal, in a format built for agents - token-efficient TOON output, structured errors, and aggressive summarization of Figma's huge file trees.

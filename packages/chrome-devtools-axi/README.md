@@ -1,3 +1,5 @@
+> **Vetted copy** of [kunchenguid/chrome-devtools-axi](https://github.com/kunchenguid/chrome-devtools-axi) at commit `5a23296`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../SOURCES.md). Original: [kunchenguid/chrome-devtools-axi README](https://github.com/kunchenguid/chrome-devtools-axi/blob/5a23296f1972faa7665fe09216d702d03a84b749/README.md).
+
 <h1 align="center">chrome-devtools-axi</h1>
 
 <p align="center">

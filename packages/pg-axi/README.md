@@ -1,3 +1,5 @@
+> **Vetted copy** of [thatdudealso/pg-axi](https://github.com/thatdudealso/pg-axi) at commit `4870141`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../SOURCES.md). Original: [thatdudealso/pg-axi README](https://github.com/thatdudealso/pg-axi/blob/48701411a50d45458f5fffb627f93eef0d57a0b3/README.md).
+
 # pg-axi
 
 Agent-facing PostgreSQL operations AXI for discovering, creating, inspecting,

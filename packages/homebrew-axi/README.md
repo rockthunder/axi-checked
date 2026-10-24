@@ -1,3 +1,5 @@
+> **Vetted copy** of [mstuart/homebrew-axi](https://github.com/mstuart/homebrew-axi) at commit `724e55b`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../SOURCES.md). Original: [mstuart/homebrew-axi README](https://github.com/mstuart/homebrew-axi/blob/724e55bce4bda60ff829a357ebc766a8d7392269/README.md).
+
 <h1 align="center">homebrew-axi</h1>
 
 <p align="center">

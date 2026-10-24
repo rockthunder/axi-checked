@@ -1,3 +1,5 @@
+> **Vetted copy** of [JarvusInnovations/slack-axi](https://github.com/JarvusInnovations/slack-axi) at commit `278a23b`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../SOURCES.md). Original: [JarvusInnovations/slack-axi README](https://github.com/JarvusInnovations/slack-axi/blob/278a23ba70f4d70ce432fb1c1c48a0caa33f99cd/README.md).
+
 # slack-axi
 
 An [AXI](https://github.com/JarvusInnovations) (Agent eXperience Interface) CLI for Slack — built for

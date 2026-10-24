@@ -1,3 +1,5 @@
+> **Vetted copy** of [kunchenguid/axi](https://github.com/kunchenguid/axi) (`packages/axi-sdk-js`) at commit `78d2250`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../../../SOURCES.md). Original: [kunchenguid/axi README](https://github.com/kunchenguid/axi/blob/78d2250420d7b5d07796d44659ec64569d87fa7d/packages/axi-sdk-js/README.md).
+
 <h1 align="center">axi-sdk-js</h1>
 
 <p align="center">

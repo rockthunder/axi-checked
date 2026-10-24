@@ -1,3 +1,5 @@
+> **Vetted copy** of [kunchenguid/lavish-axi](https://github.com/kunchenguid/lavish-axi) at commit `6c4f682`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../SOURCES.md). Original: [kunchenguid/lavish-axi README](https://github.com/kunchenguid/lavish-axi/blob/6c4f682ac9cf23d56176ce67445902158db87149/README.md).
+
 <h1 align="center">lavish-axi</h1>
 <p align="center">
   <a href="https://github.com/kunchenguid/lavish-axi/actions/workflows/ci.yml"

@@ -1,3 +1,5 @@
+> **Vetted copy** of [kunchenguid/gh-axi](https://github.com/kunchenguid/gh-axi) at commit `400b911`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../SOURCES.md). Original: [kunchenguid/gh-axi README](https://github.com/kunchenguid/gh-axi/blob/400b911985dc20a285a049b330d1467947588e97/README.md).
+
 <h1 align="center">gh-axi</h1>
 
 <p align="center">

@@ -1,3 +1,5 @@
+> **Vetted copy** of [ardaatahan/canva-axi](https://github.com/ardaatahan/canva-axi) at commit `2ed9911`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../SOURCES.md). Original: [ardaatahan/canva-axi README](https://github.com/ardaatahan/canva-axi/blob/2ed9911e00172c735814d871c139346bd505f37a/README.md).
+
 # canva-axi
 
 AXI-compliant CLI for Canva designs via Canva API — agent-ergonomic

@@ -1,3 +1,5 @@
+> **Vetted copy** of [thatdudealso/redis-axi](https://github.com/thatdudealso/redis-axi) at commit `f6cd8ad`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../SOURCES.md). Original: [thatdudealso/redis-axi README](https://github.com/thatdudealso/redis-axi/blob/f6cd8ad24eff88f0bdd570b0bcfc6782f13499dd/README.md).
+
 # redis-axi
 
 Agent-facing Redis AXI for safe token-efficient CLI workflows.

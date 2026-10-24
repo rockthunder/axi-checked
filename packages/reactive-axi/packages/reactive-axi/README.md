@@ -1,3 +1,5 @@
+> **Vetted copy** of [adeeshsharma/reactive-axi](https://github.com/adeeshsharma/reactive-axi) (`packages/reactive-axi`) at commit `491a3e6`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../../../SOURCES.md). Original: [adeeshsharma/reactive-axi README](https://github.com/adeeshsharma/reactive-axi/blob/491a3e648bc16e9d3d763b7244d852a75e322f41/packages/reactive-axi/README.md).
+
 # reactive-axi
 
 Click any element in your live React, Vue, or Svelte app (Vite, TanStack Start, Next.js Pages/App Router, Create React App, plain Vite+Vue, or plain Vite+Svelte) and send feedback straight to your coding agent, resolved to the exact source location before it ever reaches them - down to the file and line where the framework's own dev tooling makes that possible. The framework and its installed version are auto-detected, shown right in the chrome shell's topbar.

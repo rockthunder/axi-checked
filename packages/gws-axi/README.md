@@ -1,3 +1,5 @@
+> **Vetted copy** of [JarvusInnovations/gws-axi](https://github.com/JarvusInnovations/gws-axi) at commit `5b89be0`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../SOURCES.md). Original: [JarvusInnovations/gws-axi README](https://github.com/JarvusInnovations/gws-axi/blob/5b89be0c120dcf5840b1f8280d8bc168dc0f8b29/README.md).
+
 # gws-axi
 
 Agent-ergonomic CLI for Google Workspace — Gmail, Calendar, Docs, Drive, Slides, Sheets, and Chat behind a single command, built to the [AXI standard](https://axi.md): [TOON](https://toonformat.dev/)-formatted output, contextual next-step suggestions, idempotent mutations, and multi-account safety by default.

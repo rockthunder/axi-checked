@@ -1,3 +1,5 @@
+> **Vetted copy** of [cmosgh/atl-axi](https://github.com/cmosgh/atl-axi) at commit `c438fce`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../SOURCES.md). Original: [cmosgh/atl-axi README](https://github.com/cmosgh/atl-axi/blob/c438fcea33e08f7de35828ce0e7acd1ac52e8b08/README.md).
+
 # atl-axi
 
 Agent-ergonomic **Jira Cloud** CLI, built on the [AXI](https://axi.md) principles: token-efficient [TOON](https://toonformat.dev/) output, minimal schemas, definitive empty states, structured errors, idempotent mutations, and next-step hints.

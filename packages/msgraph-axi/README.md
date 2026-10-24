@@ -1,3 +1,5 @@
+> **Vetted copy** of [jeffreyhaen/msgraph-axi](https://github.com/jeffreyhaen/msgraph-axi) at commit `0c59115`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../SOURCES.md). Original: [jeffreyhaen/msgraph-axi README](https://github.com/jeffreyhaen/msgraph-axi/blob/0c59115f6a779f1b84a57a9cc273d8571d17ea0a/README.md).
+
 # msgraph-axi (Microsoft Graph axi)
 
 [![ci](https://github.com/jeffreyhaen/msgraph-axi/actions/workflows/ci.yml/badge.svg)](https://github.com/jeffreyhaen/msgraph-axi/actions/workflows/ci.yml)

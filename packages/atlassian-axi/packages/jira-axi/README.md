@@ -1,3 +1,5 @@
+> **Vetted copy** of [emilchristensen/atlassian-axi](https://github.com/emilchristensen/atlassian-axi) (`packages/jira-axi`) at commit `bfbbb66`. This README is the upstream text; behaviour differs where this repo patched it - see [`SECURITY-REVIEW.md`](../../../../SECURITY-REVIEW.md) and [`SOURCES.md`](../../../../SOURCES.md). Original: [emilchristensen/atlassian-axi README](https://github.com/emilchristensen/atlassian-axi/blob/bfbbb668b8bc08440bf613a0db4217a8f8ff917f/packages/jira-axi/README.md).
+
 # jira-axi
 
 Agent-ergonomic Jira CLI, backed by Atlassian's `acli`.
