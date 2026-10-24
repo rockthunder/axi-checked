@@ -177,6 +177,56 @@ test("non-read-only query is dry-run unless --execute is passed", () => {
   assert.match(executed.stdout, /dry_run: false/);
 });
 
+test("SQL that is not provably one plain read statement needs --execute (read-only guard cannot be bypassed)", () => {
+  const cwd = tempWorkspace();
+  const fakeBin = makeFakeBin(cwd);
+  const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
+  const bypasses = [
+    "select 1; drop table users",
+    "select 1; do $$ begin perform 1; end $$",
+    "select 1; call dangerous()",
+    "select * into leaked from users",
+    "select 1; copy (select 1) to program 'id'",
+    "select 1 /* x */ ; /* y */ vacuum full users",
+    "with x as (select 1) merge into t using x on true when matched then delete",
+    "select 'it''s'; truncate users",
+    "select $a$ ; $a$; delete from users",
+    "select E'\\'; delete from users; --'",
+    "select 1 -- a comment\n; update users set a = 1",
+    "select 'unterminated"
+  ];
+  for (const sql of bypasses) {
+    const result = run(["query", "--sql", sql], { cwd, env });
+    assert.equal(result.status, 0, sql);
+    assert.match(result.stdout, /dry_run: true/, `expected dry run for: ${sql}`);
+    assert.match(result.stdout, /read_only: false/, sql);
+  }
+  for (const sql of ["select now()", "select 'a;b' as x", "select 1;", "/* c */ show server_version", "with x as (select 1) select * from x", "explain select 1"]) {
+    const result = run(["query", "--sql", sql], { cwd, env });
+    assert.match(result.stdout, /read_only: true/, `expected read-only for: ${sql}`);
+  }
+});
+
+test("read-only queries are enforced by the server and passwords never reach argv", () => {
+  const cwd = tempWorkspace();
+  const log = path.join(cwd, "psql.log");
+  const fakeBin = makeFakeBin(cwd, {
+    psql: `#!/bin/sh
+printf 'ARGS=%s\nOPTIONS=%s\nPASS=%s\n' "$*" "$PGOPTIONS" "$PGPASSWORD" >> '${log}'
+echo ok
+`
+  });
+  const env = { PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
+
+  const result = run(["query", "--sql", "select 1", "--url", "postgres://app:s3cr%40t@db.example.com:5432/app?sslmode=require"], { cwd, env });
+  assert.equal(result.status, 0);
+  const logged = fs.readFileSync(log, "utf8");
+  assert.match(logged, /OPTIONS=.*default_transaction_read_only=on/);
+  assert.match(logged, /PASS=s3cr@t/);
+  assert.doesNotMatch(logged.split("\n").find((line) => line.startsWith("ARGS=")), /s3cr/);
+  assert.match(logged, /ARGS=.*db\.example\.com/);
+});
+
 test("create is dry-run by default and executes only with --execute", () => {
   const cwd = tempWorkspace();
   const fakeBin = makeFakeBin(cwd);

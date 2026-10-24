@@ -189,10 +189,27 @@ function flagName(rawName) {
   return rawName.slice(2).replaceAll("-", "_");
 }
 
+// A password embedded in a connection URL must not travel on the psql command line (visible to other
+// local users in the process list). Split it out; runCommand hands it to the child as PGPASSWORD.
+function splitUrlPassword(raw) {
+  if (!raw) return { url: "", password: "" };
+  try {
+    const parsed = new URL(raw);
+    if (!parsed.password) return { url: raw, password: "" };
+    const password = decodeURIComponent(parsed.password);
+    parsed.password = "";
+    return { url: parsed.toString(), password };
+  } catch {
+    return { url: raw, password: "" };
+  }
+}
+
 function buildContext(flags) {
+  const { url, password } = splitUrlPassword(flags.url ?? process.env.DATABASE_URL ?? "");
   return {
     cwd: path.resolve(flags.cwd ?? process.cwd()),
-    url: flags.url ?? process.env.DATABASE_URL ?? "",
+    url,
+    password,
     host: flags.host ?? process.env.PGHOST ?? "",
     port: flags.port ?? process.env.PGPORT ?? "",
     user: flags.user ?? process.env.PGUSER ?? "",
@@ -339,7 +356,7 @@ function query(parsed, context) {
   }
   ensureTool("psql", "query");
   const finalSql = applyLimit(sql, parsed.flags.limit);
-  const result = runPsql(finalSql, context, { tuplesOnly: false, noAlign: false });
+  const result = runPsql(finalSql, context, { tuplesOnly: false, noAlign: false, readOnly });
   if (result.status !== 0) runtimeError("postgres query failed", [sanitize(result.stderr || result.stdout)]);
   const sanitized = sanitizeSecretColumns(result.stdout);
   const body = parsed.flags.full ? sanitized : truncate(sanitized, RESULT_LIMIT).text;
@@ -550,7 +567,11 @@ function runPsql(sql, context, options = {}) {
   if (options.noAlign) args.push("--no-align");
   args.push(...connectionArgs(context, "psql"));
   args.push("-c", sql);
-  return runCommand("psql", args, context);
+  // Read-only queries are also enforced by the server, not just by isReadOnlySql().
+  const effective = options.readOnly
+    ? { ...context, env: { ...(context.env ?? {}), PGOPTIONS: `${process.env.PGOPTIONS ?? ""} -c default_transaction_read_only=on`.trim() } }
+    : context;
+  return runCommand("psql", args, effective);
 }
 
 function connectionArgs(context, tool) {
@@ -685,9 +706,79 @@ function readSql(flags, context) {
   return "";
 }
 
+// Returns the SQL with comments removed and string / quoted-identifier / dollar-quoted contents blanked,
+// or null when it cannot be tokenised with certainty (unterminated quote or comment, E'' strings).
+function sqlSkeleton(sql) {
+  const s = String(sql);
+  let out = "";
+  let i = 0;
+  while (i < s.length) {
+    const c = s[i];
+    const n = s[i + 1];
+    if (c === "-" && n === "-") {
+      const end = s.indexOf("\n", i);
+      out += " ";
+      i = end === -1 ? s.length : end + 1;
+      continue;
+    }
+    if (c === "/" && n === "*") {
+      let depth = 1;
+      let j = i + 2;
+      while (j < s.length && depth > 0) {
+        if (s[j] === "/" && s[j + 1] === "*") { depth += 1; j += 2; }
+        else if (s[j] === "*" && s[j + 1] === "/") { depth -= 1; j += 2; }
+        else j += 1;
+      }
+      if (depth > 0) return null;
+      out += " ";
+      i = j;
+      continue;
+    }
+    if (c === "'" || c === "\"") {
+      if (c === "'" && /^[eE]$/.test(s[i - 1] ?? "") && !/[A-Za-z0-9_]/.test(s[i - 2] ?? "")) return null; // E'..' allows backslash escapes
+      let j = i + 1;
+      for (;;) {
+        if (j >= s.length) return null;
+        if (s[j] === c) {
+          if (s[j + 1] === c) { j += 2; continue; }
+          break;
+        }
+        j += 1;
+      }
+      out += c + c;
+      i = j + 1;
+      continue;
+    }
+    if (c === "$") {
+      const tag = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/.exec(s.slice(i, i + 80));
+      if (tag) {
+        const close = s.indexOf(tag[0], i + tag[0].length);
+        if (close === -1) return null;
+        out += "$$";
+        i = close + tag[0].length;
+        continue;
+      }
+    }
+    out += c;
+    i += 1;
+  }
+  return out;
+}
+
+// Fails closed: anything not provably ONE plain read statement needs --execute.
+// The server enforces read-only as well (see runPsql), so this is defence in depth.
 function isReadOnlySql(sql) {
-  const normalized = String(sql).trim().replace(/^\/\*[\s\S]*?\*\//, "").replace(/^--.*$/gm, "").trim().toLowerCase();
-  return /^(select|with|show|explain)\b/.test(normalized) && !/\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|copy\s+.+\s+from)\b/.test(normalized);
+  const skeleton = sqlSkeleton(sql);
+  if (skeleton === null) return false;
+  const normalized = skeleton.trim().replace(/;\s*$/, "").toLowerCase();
+  if (normalized.includes(";")) return false;
+  return (
+    /^(select|with|show|explain)\b/.test(normalized) &&
+    !/\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|copy|call|merge|into|refresh|vacuum|reindex|cluster|lock|listen|notify|unlisten|execute|prepare|deallocate|import|reassign|discard|load|checkpoint|set|reset)\b/.test(normalized) &&
+    !/\bdo\s*(\$\$|language\b)/.test(normalized) &&
+    !/\bcomment\s+on\b/.test(normalized) &&
+    !/\bsecurity\s+label\b/.test(normalized)
+  );
 }
 
 function applyLimit(sql, limitValue) {
@@ -780,6 +871,7 @@ function isComposeFile(file) {
 function runCommand(cmd, args, context) {
   const env = { ...process.env, ...(context.env ?? {}) };
   if (context.service) env.PGSERVICE = context.service;
+  if (context.password && !env.PGPASSWORD) env.PGPASSWORD = context.password;
   const result = spawnSync(cmd, args, { cwd: context.cwd, env, encoding: "utf8", maxBuffer: 1024 * 1024 * 8 });
   if (result.error) return { status: 127, stdout: "", stderr: result.error.message };
   return { status: result.status ?? 1, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
