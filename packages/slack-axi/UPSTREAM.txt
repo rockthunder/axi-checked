@@ -1,0 +1,5 @@
+Upstream: https://github.com/JarvusInnovations/slack-axi
+Commit:   278a23ba70f4d70ce432fb1c1c48a0caa33f99cd
+Date:     2026-06-26T22:33:54-04:00
+Source README: https://github.com/JarvusInnovations/slack-axi#readme
+Snapshot of tracked files at the commit above. Excluded: .github/ (upstream CI/publish config).
