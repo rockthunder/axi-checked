@@ -125,7 +125,40 @@ const RECOMMENDATIONS = {
 };
 
 const BLOCKING_COMMANDS = new Set(["subscribe", "psubscribe", "ssubscribe", "blpop", "brpop", "blmove", "blmpop", "bzpopmin", "bzpopmax", "bzmpop", "xread", "monitor", "wait"]);
-const WRITE_COMMANDS = new Set(["set", "mset", "msetnx", "getset", "setex", "psetex", "setnx", "setrange", "append", "incr", "incrby", "incrbyfloat", "decr", "decrby", "del", "unlink", "rename", "renamenx", "expire", "expireat", "pexpire", "pexpireat", "persist", "move", "copy", "restore", "dump", "sort", "hset", "hmset", "hsetnx", "hincrby", "hincrbyfloat", "hdel", "lpush", "lpushx", "rpush", "rpushx", "linsert", "lset", "ltrim", "lpop", "rpop", "lmove", "lmpop", "sadd", "srem", "smove", "spop", "sdiffstore", "sinterstore", "sunionstore", "zadd", "zrem", "zincrby", "zpopmin", "zpopmax", "zmpop", "zrangestore", "zdiffstore", "zinterstore", "zunionstore", "xadd", "xtrim", "xdel", "xgroup", "xack", "xclaim", "xautoclaim", "flushdb", "flushall", "acl", "config", "debug", "slaveof", "replicaof", "failover", "reset", "swapdb", "object"]);
+// Allowlist, not denylist: a command is "read-only" (runs without --execute) only if it is known to be.
+// The previous denylist of write commands let EVAL/EVALSHA/FCALL (arbitrary Lua), SHUTDOWN, PUBLISH, MODULE LOAD,
+// SETBIT, PFADD, CLIENT KILL, CLUSTER RESET, ... run unguarded.
+const READ_COMMANDS = new Set([
+  "get", "mget", "getrange", "substr", "strlen", "exists", "type", "ttl", "pttl", "expiretime", "pexpiretime", "randomkey", "dbsize", "keys", "scan", "lcs",
+  "hget", "hmget", "hgetall", "hkeys", "hvals", "hlen", "hexists", "hstrlen", "hscan", "hrandfield",
+  "llen", "lrange", "lindex", "lpos",
+  "scard", "smembers", "sismember", "smismember", "sinter", "sunion", "sdiff", "sintercard", "srandmember", "sscan",
+  "zcard", "zcount", "zrange", "zrevrange", "zrangebyscore", "zrevrangebyscore", "zrangebylex", "zrevrangebylex", "zscore", "zmscore", "zrank", "zrevrank", "zlexcount", "zscan", "zrandmember", "zinter", "zunion", "zdiff", "zintercard",
+  "xlen", "xrange", "xrevrange", "xpending",
+  "bitcount", "bitpos", "getbit", "pfcount", "geopos", "geodist", "geohash", "geosearch", "georadius_ro", "georadiusbymember_ro",
+  "info", "time", "ping", "echo", "lastsave", "role"
+]);
+const READ_SUBCOMMANDS = {
+  config: ["get"],
+  client: ["list", "info", "getname", "id", "trackinginfo"],
+  acl: ["list", "getuser", "whoami", "users", "cat", "log"],
+  memory: ["usage", "stats", "doctor", "malloc-stats"],
+  object: ["encoding", "freq", "idletime", "refcount"],
+  slowlog: ["get", "len"],
+  latency: ["latest", "history", "graph", "doctor"],
+  xinfo: ["stream", "groups", "consumers"],
+  pubsub: ["channels", "numsub", "numpat", "shardchannels", "shardnumsub"],
+  command: ["info", "count", "docs", "list", "getkeys"],
+  cluster: ["info", "nodes", "slots", "shards", "keyslot", "countkeysinslot", "getkeysinslot", "myid", "replicas", "links"],
+  sentinel: ["masters", "master", "replicas", "slaves", "sentinels", "get-master-addr-by-name", "ckquorum"]
+};
+
+function isReadOnlyRedisCommand(tokens) {
+  const first = String(tokens[0] ?? "").toLowerCase();
+  const subcommands = Object.hasOwn(READ_SUBCOMMANDS, first) ? READ_SUBCOMMANDS[first] : undefined;
+  if (subcommands) return subcommands.includes(String(tokens[1] ?? "").toLowerCase());
+  return READ_COMMANDS.has(first);
+}
 
 main();
 
@@ -207,14 +240,30 @@ function flagName(rawName) {
   return rawName.slice(2).replaceAll("-", "_");
 }
 
+// A password embedded in a connection URL must not travel on the redis-cli command line (visible to other
+// local users in the process list). Split it out; redisCmd hands it to redis-cli as REDISCLI_AUTH.
+function splitUrlPassword(raw) {
+  if (!raw) return { url: "", password: "" };
+  try {
+    const parsed = new URL(raw);
+    if (!parsed.password) return { url: raw, password: "" };
+    const password = decodeURIComponent(parsed.password);
+    parsed.password = "";
+    return { url: parsed.toString(), password };
+  } catch {
+    return { url: raw, password: "" };
+  }
+}
+
 function buildContext(flags) {
   const rawUrl = flags.url ?? process.env.REDIS_URL ?? process.env.REDIS_URI ?? "";
+  const { url, password: urlPassword } = splitUrlPassword(rawUrl);
   return {
     cwd: path.resolve(flags.cwd ?? process.cwd()),
-    url: rawUrl,
+    url,
     host: flags.host ?? process.env.REDIS_HOST ?? "",
     port: flags.port ?? process.env.REDIS_PORT ?? "",
-    password: flags.password ?? process.env.REDIS_PASSWORD ?? process.env.REDISCLI_AUTH ?? "",
+    password: flags.password ?? process.env.REDIS_PASSWORD ?? process.env.REDISCLI_AUTH ?? urlPassword,
     database: flags.database ?? process.env.REDIS_DB ?? process.env.REDIS_DATABASE ?? "",
     tls: flags.tls ?? (rawUrl.startsWith("rediss://") || process.env.REDIS_TLS === "true" || process.env.REDIS_TLS === "1" ? true : false),
     tlsCert: flags.tls_cert ?? process.env.REDIS_TLS_CERT ?? "",
@@ -587,11 +636,12 @@ function query(parsed, context) {
 
   if (parsed.flags.command) {
     const cmd = parsed.flags.command.trim();
-    const firstWord = cmd.split(/\s+/)[0].toLowerCase();
+    const cmdTokens = shellSplit(cmd);
+    const firstWord = String(cmdTokens[0] ?? "").toLowerCase();
     if (BLOCKING_COMMANDS.has(firstWord)) {
       usageError(`blocking command ${toonScalar(firstWord)} is not allowed by default`, ["redis-axi does not run blocking commands; use redis-cli directly for pub/sub or blocking reads"]);
     }
-    const isWrite = WRITE_COMMANDS.has(firstWord);
+    const isWrite = !isReadOnlyRedisCommand(cmdTokens);
     if (isWrite && !parsed.flags.execute) {
       print(["query:", "  dry_run: true", `  read_only: false`, `  command: ${toonScalar(sanitize(cmd))}`, formatHelp(["Add `--execute` to run this mutating command after review"])].join("\n"));
       return;
@@ -615,7 +665,8 @@ function query(parsed, context) {
     const lines2 = content.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
     const hasBlocking = lines2.some((l) => BLOCKING_COMMANDS.has(l.split(/\s+/)[0].toLowerCase()));
     if (hasBlocking) usageError("file contains blocking commands which are not allowed by default", ["Remove SUBSCRIBE, BLPOP, MONITOR, XREAD BLOCK from the file"]);
-    const hasWrite = lines2.some((l) => WRITE_COMMANDS.has(l.split(/\s+/)[0].toLowerCase()));
+    // Anything that is not a recognised read command (including RESP-framed input such as "*3") needs --execute.
+    const hasWrite = lines2.some((l) => !isReadOnlyRedisCommand(shellSplit(l)));
     if (hasWrite && !parsed.flags.execute) {
       print(["query:", "  dry_run: true", `  read_only: false`, `  file: ${toonScalar(parsed.flags.file)}`, `  commands: ${lines2.length}`, formatHelp(["Add `--execute` to run this file after review"])].join("\n"));
       return;
@@ -642,12 +693,14 @@ function create(parsed, context) {
   const command = buildCreateCommand(kind, name, parsed.flags, db);
   if (!command) usageError(`unknown create kind ${toonScalar(kind)}`, ["valid kinds: key, string, hash, list, set, zset, stream, user, group"]);
 
+  // ACL user passwords are masked in output and sent to redis-cli on stdin, never on its command line.
+  const shown = kind === "user" ? command.map((arg) => (String(arg).startsWith(">") ? ">***" : arg)) : command;
   if (!parsed.flags.execute) {
-    print(["create:", "  dry_run: true", `  kind: ${kind}`, `  name: ${toonScalar(sanitize(name))}`, `  command: ${toonScalar(sanitize(command.join(" ")))}`, formatHelp([`Run \`redis-axi create --kind ${kind} --name ${name} --execute\` to create after review`])].join("\n"));
+    print(["create:", "  dry_run: true", `  kind: ${kind}`, `  name: ${toonScalar(sanitize(name))}`, `  command: ${toonScalar(sanitize(shown.join(" ")))}`, formatHelp([`Run \`redis-axi create --kind ${kind} --name ${name} --execute\` to create after review`])].join("\n"));
     return;
   }
   ensureTool("redis-cli", "create");
-  const result = redisCmd(command, context);
+  const result = kind === "user" ? redisCmd(command.slice(0, 2), context, respInline(command.slice(2))) : redisCmd(command, context);
   if (result.status !== 0) runtimeError("redis create command failed", [sanitize(result.stderr || result.stdout)]);
   const lines = ["create:", "  dry_run: false", `  kind: ${kind}`, `  name: ${toonScalar(sanitize(name))}`, `  output: ${toonScalar(truncate(sanitize(result.stdout || result.stderr), PREVIEW_LIMIT).text)}`];
   if (ttl) lines.push(`  ttl: ${ttl}s`);
@@ -940,7 +993,14 @@ function buildCreateCommand(kind, name, flags, db) {
     const pairs = Object.entries(spec).flatMap(([k, v]) => [k, String(v)]);
     return ["-n", n, "XADD", name, "*", ...pairs];
   }
-  if (kind === "user") return ["-n", n, "ACL", "SETUSER", name, "on", "nopass", "~*", "&*", "+@all"];
+  if (kind === "user") {
+    // Never create a passwordless user: "on nopass ~* &* +@all" is an unauthenticated superuser.
+    // A password is required, and the default permissions are read-only; widen them deliberately via
+    // --spec '{"rules":["~app:*","+@read","+@write"]}'.
+    if (!value) usageError("creating an ACL user requires a password: pass --value <password>", ["Run `redis-axi create --kind user --name <user> --value <password> [--spec '{\"rules\":[\"~app:*\",\"+@read\"]}']`"]);
+    const rules = Array.isArray(spec?.rules) && spec.rules.length > 0 ? spec.rules.map(String) : ["~*", "&*", "+@read"];
+    return ["-n", n, "ACL", "SETUSER", name, "on", `>${value}`, ...rules];
+  }
   if (kind === "group") {
     const [stream, group] = name.split(":").map((s) => s.trim());
     if (!stream || !group) return null;
@@ -1225,6 +1285,11 @@ function parseRedisPairs(text) {
     if (lines[i] === "runid") out[out.length - 1]._filled = true;
   }
   return out;
+}
+
+// One inline command for redis-cli's stdin: every token double-quoted, with \ and " escaped.
+function respInline(tokens) {
+  return `${tokens.map((token) => `"${String(token).replaceAll("\\", "\\\\").replaceAll("\"", "\\\"")}"`).join(" ")}\n`;
 }
 
 function shellSplit(cmd) {
