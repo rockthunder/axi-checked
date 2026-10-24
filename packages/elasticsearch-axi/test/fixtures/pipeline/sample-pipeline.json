@@ -1,0 +1,6 @@
+{
+  "description": "Set a processed flag",
+  "processors": [
+    { "set": { "field": "processed", "value": true } }
+  ]
+}

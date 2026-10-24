@@ -1,0 +1,11 @@
+{
+  "Resources": {
+    "LogsDomain": {
+      "Type": "AWS::OpenSearchService::Domain",
+      "Properties": {
+        "DomainName": "logs-cluster",
+        "EngineVersion": "OpenSearch_2.11"
+      }
+    }
+  }
+}

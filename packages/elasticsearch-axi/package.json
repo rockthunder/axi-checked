@@ -1,0 +1,25 @@
+{
+  "name": "elasticsearch-axi",
+  "version": "0.1.0",
+  "description": "Agent-facing Elasticsearch/OpenSearch operations AXI for safe token-efficient CLI workflows.",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thatdudealso/elasticsearch-axi.git"
+  },
+  "homepage": "https://github.com/thatdudealso/elasticsearch-axi#readme",
+  "bugs": {
+    "url": "https://github.com/thatdudealso/elasticsearch-axi/issues"
+  },
+  "bin": {
+    "elasticsearch-axi": "./bin/elasticsearch-axi.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "test:live": "ELASTICSEARCH_AXI_LIVE_TESTS=1 node --test",
+    "skill:check": "node bin/elasticsearch-axi.js skill generate --check"
+  },
+  "keywords": ["elasticsearch", "opensearch", "axi", "cli", "toon", "search"],
+  "license": "MIT",
+  "engines": { "node": ">=20" }
+}

@@ -1,0 +1,13 @@
+services:
+  opensearch-node1:
+    image: opensearchproject/opensearch:2
+    ports:
+      - "9201:9200"
+  opensearch-node2:
+    image: opensearchproject/opensearch:2
+    ports:
+      - "9202:9200"
+  cache:
+    image: redis:7
+    ports:
+      - "6379:6379"
