@@ -219,7 +219,9 @@ describe("buildTransportArgs", () => {
     const args = buildTransportArgs();
     expect(args).toEqual([
       "-y",
-      "chrome-devtools-mcp@latest",
+      "chrome-devtools-mcp@1.11.0",
+      "--no-usage-statistics",
+      "--no-performance-crux",
       "--isolated",
       "--headless",
       "--chrome-arg=--use-mock-keychain",
@@ -232,7 +234,9 @@ describe("buildTransportArgs", () => {
     const args = buildTransportArgs();
     expect(args).toEqual([
       "-y",
-      "chrome-devtools-mcp@latest",
+      "chrome-devtools-mcp@1.11.0",
+      "--no-usage-statistics",
+      "--no-performance-crux",
       "--isolated",
       "--chrome-arg=--use-mock-keychain",
       "--chrome-arg=--password-store=basic",
@@ -563,22 +567,6 @@ describe("resolveTransportSpec", () => {
     }
   });
 
-  it("defaults to spawning via npx when MCP_PATH is unset and auto-detection finds nothing", () => {
-    // Inject a probe that simulates "no global chrome-devtools-mcp" so the
-    // test outcome doesn't depend on the host machine's npm install state.
-    const probe = {
-      existsSync: () => false,
-      getNpmPrefix: () => "/usr",
-    };
-    const spec = resolveTransportSpec(probe);
-    expect(spec.command).toBe("npx");
-    expect(spec.args[0]).toBe("-y");
-    expect(spec.args[1]).toBe("chrome-devtools-mcp@latest");
-    // Default mcp args follow
-    expect(spec.args).toContain("--isolated");
-    expect(spec.args).toContain("--headless");
-  });
-
   it("spawns node directly when CHROME_DEVTOOLS_AXI_MCP_PATH is set", () => {
     process.env.CHROME_DEVTOOLS_AXI_MCP_PATH =
       "/opt/mcp/build/src/bin/chrome-devtools-mcp.js";
@@ -587,10 +575,48 @@ describe("resolveTransportSpec", () => {
     expect(spec.args[0]).toBe("/opt/mcp/build/src/bin/chrome-devtools-mcp.js");
     // Strips the npx-only `-y, chrome-devtools-mcp@latest` prefix
     expect(spec.args).not.toContain("-y");
-    expect(spec.args).not.toContain("chrome-devtools-mcp@latest");
+    expect(spec.args).not.toContain("chrome-devtools-mcp@1.11.0");
     // Preserves the mcp-specific args
     expect(spec.args).toContain("--isolated");
     expect(spec.args).toContain("--headless");
+  });
+
+  it("runs the bundled, pinned chrome-devtools-mcp when MCP_PATH is unset (no npx, no PATH lookup)", () => {
+    const probe = {
+      existsSync: () => false,
+      getNpmPrefix: () => null,
+      findOnPath: () => "/tmp/evil/chrome-devtools-mcp",
+      resolveBundled: () => "/vetted/node_modules/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js",
+    };
+    const spec = resolveTransportSpec(probe);
+    expect(spec.command).toBe(process.execPath);
+    expect(spec.args[0]).toBe("/vetted/node_modules/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js");
+    expect(spec.args).not.toContain("-y");
+    expect(spec.command).not.toBe("npx");
+    expect(spec.args).toContain("--no-usage-statistics");
+    expect(spec.args).toContain("--no-performance-crux");
+  });
+
+  it.each(["", "   "])("treats a blank MCP_PATH as unset and still uses the bundled copy: %s", (mcpPath) => {
+    process.env.CHROME_DEVTOOLS_AXI_MCP_PATH = mcpPath;
+    const spec = resolveTransportSpec({
+      existsSync: () => false,
+      getNpmPrefix: () => null,
+      resolveBundled: () => "/vetted/mcp.js",
+    });
+    expect(spec.command).toBe(process.execPath);
+    expect(spec.args[0]).toBe("/vetted/mcp.js");
+  });
+
+  it("fails loudly instead of falling back to npx when the bundled copy is missing", () => {
+    expect(() =>
+      resolveTransportSpec({
+        existsSync: () => false,
+        getNpmPrefix: () => "/usr",
+        findOnPath: () => "/usr/bin/chrome-devtools-mcp",
+        resolveBundled: () => null,
+      }),
+    ).toThrow(/Bundled chrome-devtools-mcp@1\.11\.0 was not found/);
   });
 
   describe("shared MCP service", () => {
@@ -688,234 +714,6 @@ describe("resolveTransportSpec", () => {
     expect(spec.args).not.toContain("--isolated");
   });
 
-  it.each(["", "   "])("treats a blank MCP_PATH as unset: %s", (mcpPath) => {
-    process.env.CHROME_DEVTOOLS_AXI_MCP_PATH = mcpPath;
-    const probe = {
-      existsSync: () => false,
-      getNpmPrefix: () => null,
-    };
-    const spec = resolveTransportSpec(probe);
-    expect(spec.command).toBe("npx");
-  });
-
-  it("auto-detects a globally-installed chrome-devtools-mcp when MCP_PATH and PATH are unavailable", () => {
-    const probe = {
-      existsSync: (path: string) =>
-        path ===
-        "/usr/lib/node_modules/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js",
-      getNpmPrefix: vi.fn(() => "/usr"),
-      findOnPath: vi.fn(() => null),
-    };
-    const spec = resolveTransportSpec(probe);
-    expect(spec.command).toBe(process.execPath);
-    expect(spec.args[0]).toBe(
-      "/usr/lib/node_modules/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js",
-    );
-    expect(spec.args).not.toContain("-y");
-    expect(spec.args).not.toContain("chrome-devtools-mcp@latest");
-    expect(spec.args).toContain("--isolated");
-    expect(probe.findOnPath).toHaveBeenCalledWith("chrome-devtools-mcp");
-    expect(probe.findOnPath.mock.invocationCallOrder[0]).toBeLessThan(
-      probe.getNpmPrefix.mock.invocationCallOrder[0],
-    );
-  });
-
-  it("falls back to npx when auto-detection finds nothing", () => {
-    const probe = {
-      existsSync: () => false,
-      getNpmPrefix: () => "/usr",
-    };
-    const spec = resolveTransportSpec(probe);
-    expect(spec.command).toBe("npx");
-    expect(spec.args[0]).toBe("-y");
-  });
-
-  it("falls back to npx when npm prefix is unavailable", () => {
-    const probe = {
-      existsSync: () => true, // would match anything if asked
-      getNpmPrefix: () => null,
-    };
-    const spec = resolveTransportSpec(probe);
-    expect(spec.command).toBe("npx");
-  });
-
-  describe("PATH scanner", () => {
-    let dir: string;
-    const executableName =
-      process.platform === "win32"
-        ? "chrome-devtools-mcp.exe"
-        : "chrome-devtools-mcp";
-    const bridgeUrl = new URL("../src/bridge.ts", import.meta.url).href;
-
-    beforeEach(() => {
-      dir = mkdtempSync(join(process.cwd(), ".mcp-path-test-"));
-    });
-
-    afterEach(() => {
-      rmSync(dir, { recursive: true, force: true });
-    });
-
-    function resolveWithPath(
-      path: string | undefined,
-      platform: NodeJS.Platform = process.platform,
-    ) {
-      const env = { ...process.env };
-      if (path === undefined) delete env.PATH;
-      else env.PATH = path;
-      const output = execFileSync(
-        process.execPath,
-        [
-          "--import",
-          "tsx",
-          "--input-type=module",
-          "-e",
-          `import { resolveTransportSpec } from ${JSON.stringify(bridgeUrl)};
-Object.defineProperty(process, "platform", { value: ${JSON.stringify(platform)} });
-process.stdout.write(JSON.stringify(resolveTransportSpec()));`,
-        ],
-        {
-          cwd: dir,
-          env,
-          encoding: "utf8",
-        },
-      );
-      return JSON.parse(output);
-    }
-
-    it.each(["cmd", "bat"])(
-      "skips a Windows .%s shim on PATH and falls back to npx",
-      (extension) => {
-        writeFileSync(
-          join(dir, `chrome-devtools-mcp.${extension}`),
-          "@echo off\r\nexit /b 0\r\n",
-        );
-
-        const spec = resolveWithPath(dir, "win32");
-
-        expect(spec.command).toBe("npx");
-        expect(spec.args.slice(0, 2)).toEqual([
-          "-y",
-          "chrome-devtools-mcp@latest",
-        ]);
-      },
-    );
-
-    it("does not resolve a cwd executable when PATH is unset", () => {
-      const executable = join(dir, executableName);
-      writeFileSync(executable, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
-
-      const spec = resolveWithPath(undefined);
-
-      expect(spec.command).not.toBe(executable);
-      expect(spec.args).not.toContain(executable);
-      expect(spec.args).toContain("--isolated");
-    });
-
-    it
-      .skipIf(process.platform === "win32")
-      .each(["", ":missing", "missing::other", "missing:"])(
-      "resolves empty POSIX PATH components from cwd: %s",
-      (path) => {
-        const executable = join(dir, executableName);
-        writeFileSync(executable, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
-
-        const spec = resolveWithPath(path);
-
-        expect(spec.command).toBe(executable);
-        expect(spec.args).toContain("--isolated");
-        expect(spec.args).not.toContain("chrome-devtools-mcp@latest");
-      },
-    );
-
-    it("skips a directory named like the executable for a later regular file", () => {
-      const first = join(dir, "first");
-      const later = join(dir, "later");
-      mkdirSync(join(first, executableName), { recursive: true });
-      mkdirSync(later);
-      const executable = join(later, executableName);
-      writeFileSync(executable, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
-
-      const spec = resolveWithPath([first, later].join(delimiter));
-
-      expect(spec.command).toBe(executable);
-      expect(spec.args).toContain("--isolated");
-      expect(spec.args).not.toContain("chrome-devtools-mcp@latest");
-    });
-  });
-
-  it("uses a chrome-devtools-mcp executable on PATH when no global install is found", () => {
-    const probe = {
-      existsSync: () => false,
-      getNpmPrefix: () => "/usr",
-      findOnPath: (name: string) =>
-        name === "chrome-devtools-mcp" ? "/opt/bin/chrome-devtools-mcp" : null,
-    };
-    const spec = resolveTransportSpec(probe);
-    expect(spec.command).toBe("/opt/bin/chrome-devtools-mcp");
-    expect(spec.args).not.toContain("-y");
-    expect(spec.args).not.toContain("chrome-devtools-mcp@latest");
-    expect(spec.args).toContain("--isolated");
-    expect(spec.args).toContain("--headless");
-  });
-
-  it("uses a PATH executable when npm prefix is unavailable", () => {
-    const probe = {
-      existsSync: () => false,
-      getNpmPrefix: () => null,
-      findOnPath: () => "/opt/bin/chrome-devtools-mcp",
-    };
-    expect(resolveTransportSpec(probe).command).toBe(
-      "/opt/bin/chrome-devtools-mcp",
-    );
-  });
-
-  it("prefers a PATH executable over the npm global install without invoking npm", () => {
-    const globalPath =
-      "/usr/lib/node_modules/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js";
-    const probe = {
-      existsSync: vi.fn((path: string) => path === globalPath),
-      getNpmPrefix: vi.fn(() => "/usr"),
-      findOnPath: () => "/opt/bin/chrome-devtools-mcp",
-    };
-    const spec = resolveTransportSpec(probe);
-    expect(spec.command).toBe("/opt/bin/chrome-devtools-mcp");
-    expect(spec.args).toContain("--isolated");
-    expect(spec.args).not.toContain(globalPath);
-    expect(probe.getNpmPrefix).not.toHaveBeenCalled();
-    expect(probe.existsSync).not.toHaveBeenCalled();
-  });
-
-  it("prefers a PATH executable over the Windows npm global layout without invoking npm", () => {
-    const winPath = join(
-      "C:\\npm",
-      "node_modules",
-      "chrome-devtools-mcp",
-      "build",
-      "src",
-      "bin",
-      "chrome-devtools-mcp.js",
-    );
-    const probe = {
-      existsSync: vi.fn((path: string) => path === winPath),
-      getNpmPrefix: vi.fn(() => "C:\\npm"),
-      findOnPath: () => "/opt/bin/chrome-devtools-mcp",
-    };
-    const spec = resolveTransportSpec(probe);
-    expect(spec.command).toBe("/opt/bin/chrome-devtools-mcp");
-    expect(spec.args).not.toContain(winPath);
-    expect(probe.getNpmPrefix).not.toHaveBeenCalled();
-    expect(probe.existsSync).not.toHaveBeenCalled();
-  });
-
-  it("falls back to npx when PATH has no chrome-devtools-mcp", () => {
-    const probe = {
-      existsSync: () => false,
-      getNpmPrefix: () => "/usr",
-      findOnPath: () => null,
-    };
-    expect(resolveTransportSpec(probe).command).toBe("npx");
-  });
-
   it("explicit MCP_PATH wins without probing PATH or npm", () => {
     process.env.CHROME_DEVTOOLS_AXI_MCP_PATH = "/explicit/override.js";
     const probe = {
@@ -1004,17 +802,16 @@ describe("resolveTransport / createTransport", () => {
       const selection = resolveTransport({
         existsSync: () => false,
         getNpmPrefix: () => "/usr",
+        resolveBundled: () => "/vetted/mcp.js",
       });
 
       expect(selection.kind).toBe("stdio");
       if (selection.kind !== "stdio") {
         throw new Error("expected stdio transport");
       }
-      expect(selection.spec.command).toBe("npx");
-      expect(selection.spec.args.slice(0, 2)).toEqual([
-        "-y",
-        "chrome-devtools-mcp@latest",
-      ]);
+      expect(selection.spec.command).toBe(process.execPath);
+      expect(selection.spec.args[0]).toBe("/vetted/mcp.js");
+      expect(selection.spec.args).toContain("--no-usage-statistics");
     },
   );
 
@@ -2597,26 +2394,30 @@ describe("idle activity", () => {
 });
 
 describe("buildMcpChildEnv", () => {
-  it.each(["CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS", "CI"])(
-    "forwards %s without unrelated variables",
-    (key) => {
-      const env = buildMcpChildEnv({
-        PATH: process.env.PATH,
-        [key]: "1",
-        CHROME_DEVTOOLS_AXI_SESSION: "worker-1",
-        SECRET_TOKEN: "do-not-forward",
-        CHROME_DEVTOOLS_MCP_OTHER_SETTING: "do-not-forward",
-      });
-      expect(env[key]).toBe("1");
-      expect(env).not.toHaveProperty("SECRET_TOKEN");
-      expect(env).not.toHaveProperty("CHROME_DEVTOOLS_MCP_OTHER_SETTING");
-      expect(env).not.toHaveProperty("CHROME_DEVTOOLS_AXI_SESSION");
-    },
-  );
+  it("forwards CI without unrelated variables", () => {
+    const env = buildMcpChildEnv({
+      PATH: process.env.PATH,
+      CI: "1",
+      CHROME_DEVTOOLS_AXI_SESSION: "worker-1",
+      SECRET_TOKEN: "do-not-forward",
+      CHROME_DEVTOOLS_MCP_OTHER_SETTING: "do-not-forward",
+    });
+    expect(env.CI).toBe("1");
+    expect(env).not.toHaveProperty("SECRET_TOKEN");
+    expect(env).not.toHaveProperty("CHROME_DEVTOOLS_MCP_OTHER_SETTING");
+    expect(env).not.toHaveProperty("CHROME_DEVTOOLS_AXI_SESSION");
+  });
+
+  it("always disables usage statistics and update checks, whatever the caller sets", () => {
+    for (const caller of [{}, { CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: "0" }, { CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: "" }]) {
+      const env = buildMcpChildEnv(caller);
+      expect(env.CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS).toBe("1");
+      expect(env.CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS).toBe("1");
+    }
+  });
 
   it("keeps the SDK default environment", () => {
     const env = buildMcpChildEnv({});
     if (process.env.PATH) expect(env.PATH).toBe(process.env.PATH);
-    expect(env).not.toHaveProperty("CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS");
   });
 });

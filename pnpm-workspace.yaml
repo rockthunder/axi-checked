@@ -1,9 +1,8 @@
 packages:
   - "packages/*"
   - "packages/*/packages/*"
-  # monorepo roots of upstream projects; only their inner packages are workspace members
+  # monorepo roots of upstream projects whose root manifest is not needed (atlassian-axi's root provides shared dev tooling and stays a member)
   - "!packages/axi"
-  - "!packages/atlassian-axi"
   - "!packages/reactive-axi"
 
 # --- supply-chain policy (carried over from upstream, applied to the whole workspace) ---
@@ -38,3 +37,5 @@ overrides:
   "body-parser@>=2.0.0 <2.4.0": 2.4.0
   # fast-uri host/authority confusion advisories fixed in 3.1.9
   "fast-uri@>=3.0.0 <3.1.9": 3.1.9
+  # gws-axi: googleapis must share one google-auth-library with the app (upstream used a package-level override)
+  google-auth-library: ^10.7.0
