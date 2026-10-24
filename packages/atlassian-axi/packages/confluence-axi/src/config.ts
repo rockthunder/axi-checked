@@ -302,6 +302,21 @@ export function assertBareHostSite(site: string): void {
   if (!bareHost) {
     throw invalid();
   }
+  // Corporate build: the account-scoped API token is sent as Basic auth to this host, and the host
+  // can be chosen per call with --site (so a prompt-injected agent could pick one). Only Atlassian
+  // Cloud hosts are accepted unless the operator opts out in the environment.
+  const hostname = url.hostname.toLowerCase();
+  const atlassianHost = /(^|\.)(atlassian\.net|atlassian\.com|jira\.com)$/.test(hostname);
+  if (!atlassianHost && process.env["ATLASSIAN_AXI_ALLOW_ANY_SITE"] !== "1") {
+    throw new AxiError(
+      `Refusing to send Atlassian credentials to non-Atlassian host ${JSON.stringify(site)}`,
+      "VALIDATION_ERROR",
+      [
+        "Use your <name>.atlassian.net site",
+        "Operators with a proxy or test host can set ATLASSIAN_AXI_ALLOW_ANY_SITE=1 in the environment",
+      ],
+    );
+  }
 }
 
 /**

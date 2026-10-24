@@ -4,6 +4,12 @@ Generated from `review/log.tsv` by `python -I scripts/review-status.py render-ma
 
 ## MANUAL - needs your review
 
+- `packages/atl-axi/src/commands/api.ts`
+  Read in full. Generic escape hatch: GET/POST/PUT/DELETE against ANY /rest/ Jira endpoint with the user's token (DELETE needs --confirm, POST/PUT do not). Lets an agent do anything the token's scopes allow; scope the API token narrowly or consider disabling this command.
+- `packages/atl-axi/src/commands/setup.ts`
+  Read in full. 'setup hooks' installs persistent SessionStart hooks (user scope = every session) via axi-sdk-js; uninstall/status provided. See axi-sdk-js hooks.ts MANUAL entry.
+- `packages/atlassian-axi/packages/jira-axi/src/acli.ts`
+  Read in full. Shells out to the Atlassian CLI 'acli' via execFile (argv only, no shell, 15s timeout) and inherits whatever Jira login acli holds (acli installed separately via brew etc. - audit that binary too). jira-axi itself holds no credentials.
 - `packages/aws-axi/bin/aws-axi.js`
   Wrapper over aws/sam/cdk/terraform via spawnSync (no shell). TRUST BOUNDARY: 'plan' is described as non-mutating but runs argv arrays taken from <cwd>/aws-axi.config.json (targets[].commands.plan / .deploy), so running 'aws-axi plan' (no --execute) in an untrusted repo executes whatever programs that repo's config names; 'terraform plan' also executes repo terraform (external data sources/providers). 'apply --execute' uses non-interactive flags (terraform -auto-approve, cdk --require-approval never, sam --no-confirm-changeset); production needs --confirm-account. Full process.env passed to children; findExecutable() treats an empty PATH entry as cwd. sanitize() redaction is regex-only. Hook install writes unquoted 'node <path>' commands. Suggested hardening: only honour custom commands when --execute is given, or only from a trusted config path. Skill text had 'npx -y aws-axi' (fixed in commit 'remove remaining npx').
 - `packages/axi/packages/axi-sdk-js/src/hooks.ts`
@@ -47,6 +53,20 @@ Generated from `review/log.tsv` by `python -I scripts/review-status.py render-ma
 
 ## NOTE - minor observations
 
+- `packages/atl-axi/AGENTS.md`
+  Read in full (shown by the harness). Upstream contributor notes for agents; benign.
+- `packages/atl-axi/src/client.ts`
+  Read in full. All requests go to https://api.atlassian.com/ex/jira/<cloudId> (plus one unauthenticated GET https://<site>/_edge/tenant_info for the cloud id). buildUrl() refuses to send credentials to any other origin/path. NOTE: env ATL_AXI_API_BASE can redirect the Authorization header to any https host (or http localhost); an attacker who controls your environment could use it - treat env as trusted.
+- `packages/atlassian-axi/AGENTS.md`
+  Read in full (shown by the harness). Upstream contributor notes; includes release-please/npm publishing procedure and a note that docs recommend 'npx -y skills@latest add emilchristensen/atlassian-axi' (an on-demand fetch). Not executed by the CLI; remove or ignore for corporate use.
+- `packages/atlassian-axi/eslint.config.base.mjs`
+  SCAN-ONLY: monorepo root file (config/docs).
+- `packages/atlassian-axi/eslint.config.mjs`
+  SCAN-ONLY: monorepo root file (config/docs).
+- `packages/atlassian-axi/packages/confluence-axi/src/oauth.ts`
+  Read in full. Atlassian 3LO flow: endpoints auth.atlassian.com / api.atlassian.com only; random state, constant-time state check, callback listener on 127.0.0.1:8765 (+::1) that ignores requests without the state; NO shipped client id (env required). Client secret + rotating tokens persisted in the plaintext 0600 config. Opens the browser via spawn(open|xdg-open|cmd /c start) with ^-escaping of cmd metacharacters.
+- `packages/atlassian-axi/packages/jira-axi/src/adf.ts`
+  Pattern-scanned: markdown->ADF converter; writes a temp JSON file (mkdtemp under os.tmpdir, removed afterwards) passed to acli --body-file/--description-file.
 - `packages/chrome-devtools-axi/AGENTS.md`
   Upstream CONTRIBUTOR guidance addressed to coding agents (release workflow, 'git push no-mistakes', airlock). Not relevant to using the tool and could steer an agent working in this repo toward upstream's workflow; consider deleting upstream AGENTS.md/CLAUDE.md files from vendored packages.
 - `packages/chrome-devtools-axi/src/hooks.ts`

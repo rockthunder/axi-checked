@@ -247,12 +247,27 @@ describe("config credential resolution", () => {
 });
 
 describe("assertBareHostSite", () => {
-  it.each(["acme.atlassian.net", "acme.atlassian.net:8443", "personal.example.com"])(
-    "accepts the bare host %j",
+  it.each(["acme.atlassian.net", "acme.atlassian.net:8443", "acme.jira.com"])(
+    "accepts the Atlassian bare host %j",
     (site) => {
       expect(() => assertBareHostSite(site)).not.toThrow();
     },
   );
+
+  // Corporate build: credentials never go to a non-Atlassian host unless the operator opts in.
+  it("refuses a non-Atlassian bare host, and allows it only with ATLASSIAN_AXI_ALLOW_ANY_SITE=1", () => {
+    for (const site of ["personal.example.com", "atlassian.net.evil.com", "evilatlassian.net"]) {
+      expect(() => assertBareHostSite(site), site).toThrow(AxiError);
+    }
+    const prior = process.env["ATLASSIAN_AXI_ALLOW_ANY_SITE"];
+    process.env["ATLASSIAN_AXI_ALLOW_ANY_SITE"] = "1";
+    try {
+      expect(() => assertBareHostSite("personal.example.com")).not.toThrow();
+    } finally {
+      if (prior === undefined) delete process.env["ATLASSIAN_AXI_ALLOW_ANY_SITE"];
+      else process.env["ATLASSIAN_AXI_ALLOW_ANY_SITE"] = prior;
+    }
+  });
 
   it.each([
     "victim.atlassian.net@evil.com",
