@@ -354,6 +354,23 @@ function inspect(parsed, context) {
   if (!kind) usageError("--kind is required", ["Run `kubernetes-axi inspect --kind <pod|deployment|service|...> --name <name>`"]);
   if (!name) usageError("--name is required", ["Run `kubernetes-axi inspect --kind <kind> --name <name>`"]);
   ensureKubectl();
+  if (/^secrets?(\.|$)/i.test(kind)) {
+    // Secrets are redacted structurally, not by pattern: only key NAMES are shown. (The YAML also repeats the whole
+    // secret in the last-applied-configuration annotation, which regex redaction can miss.)
+    const secretResult = runKubectl(["get", kind, name, "-o", "json", ...nsArgs(context)], context);
+    if (secretResult.status !== 0) runtimeError("kubectl get failed", [sanitize(secretResult.stderr || secretResult.stdout)]);
+    const secret = parseJson(secretResult.stdout) ?? {};
+    const safe = {
+      apiVersion: secret.apiVersion,
+      kind: secret.kind,
+      metadata: { name: secret.metadata?.name, namespace: secret.metadata?.namespace, labels: secret.metadata?.labels, creationTimestamp: secret.metadata?.creationTimestamp },
+      type: secret.type,
+      keys: Object.keys({ ...(secret.data ?? {}), ...(secret.stringData ?? {}) }),
+      note: "secret values are never shown"
+    };
+    print(["inspect:", `  kind: ${kind}`, `  name: ${toonScalar(name)}`, `  output: ${toonScalar(JSON.stringify(safe))}`].join("\n"));
+    return;
+  }
   const result = runKubectl(["get", kind, name, "-o", "yaml", ...nsArgs(context)], context);
   if (result.status !== 0) runtimeError("kubectl get failed", [sanitize(result.stderr || result.stdout)]);
   const sanitized = sanitize(result.stdout);
@@ -553,7 +570,8 @@ function execPod(parsed, context) {
 
 function configView(parsed, context) {
   ensureKubectl();
-  const result = runKubectl(["config", "view", "--minify", "--raw"], context);
+  // No --raw: kubectl itself redacts client keys/tokens, so we never hold the real credentials.
+  const result = runKubectl(["config", "view", "--minify"], context);
   if (result.status !== 0) runtimeError("kubectl config view failed", [sanitize(result.stderr || result.stdout)]);
   const sanitized = sanitize(result.stdout);
   const body = parsed.flags.full ? sanitized : truncate(sanitized, PREVIEW_LIMIT).text;

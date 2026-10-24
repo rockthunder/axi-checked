@@ -212,7 +212,8 @@ test("list inspect logs events produce TOON output with truncation and redaction
   assert.equal(inspect.status, 0);
   assert.doesNotMatch(inspect.stdout, /c3VwZXJzZWNyZXQ=/);
   assert.doesNotMatch(inspect.stdout, /raw-secret-value/);
-  assert.match(inspect.stdout, /<redacted>/);
+  // Secrets are redacted structurally (key names only), not by pattern.
+  assert.match(inspect.stdout, /secret values are never shown/);
 
   const logs = run(["logs", "--pod", "web-1"], { cwd, env });
   assert.equal(logs.status, 0);
