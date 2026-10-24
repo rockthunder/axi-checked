@@ -1,0 +1,5 @@
+Upstream: https://github.com/dtabolich/ado-axi
+Commit:   8c96e95d41d6bbe839c583c7cc18c4453d40b46e
+Date:     2026-08-09T23:32:50+03:00
+Source README: https://github.com/dtabolich/ado-axi#readme
+Snapshot of tracked files at the commit above. Excluded: .github/ (upstream CI/publish config).

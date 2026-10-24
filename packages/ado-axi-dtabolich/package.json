@@ -1,0 +1,55 @@
+{
+  "name": "ado-axi",
+  "version": "0.1.0",
+  "description": "AXI-compliant Azure DevOps CLI — token-efficient TOON output for agent repo/PR/CI workflows",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dtabolich/ado-axi.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dtabolich/ado-axi/issues"
+  },
+  "homepage": "https://github.com/dtabolich/ado-axi#readme",
+  "keywords": [
+    "azure-devops",
+    "ado",
+    "cli",
+    "agent",
+    "axi",
+    "toon"
+  ],
+  "bin": {
+    "ado-axi": "./dist/bin/ado-axi.js"
+  },
+  "files": [
+    "dist",
+    "skills/ado-axi",
+    "LICENSE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx bin/ado-axi.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@toon-format/toon": "^2.1.0",
+    "axi-sdk-js": "^0.1.10"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}
