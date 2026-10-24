@@ -1,0 +1,5 @@
+Upstream: https://github.com/thatdudealso/redis-axi
+Commit:   f6cd8ad24eff88f0bdd570b0bcfc6782f13499dd
+Date:     2026-07-10T09:37:24-04:00
+Source README: https://github.com/thatdudealso/redis-axi#readme
+Snapshot of tracked files at the commit above. Excluded: .github/ (upstream CI/publish config).
