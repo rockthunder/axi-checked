@@ -1,0 +1,8 @@
+# Benchmark result data — 1700+ files, 28MB of agent transcripts/judge outputs
+bench/published-results/
+
+# graft's cards are gitignored but should stay greppable: ripgrep reads
+# .ignore before .gitignore, so this re-admits the tree to search only.
+!graft/
+graft/.cache/
+graft/.graph/

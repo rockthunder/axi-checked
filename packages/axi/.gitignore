@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Benchmark results (generated, often large)
+bench/results/*
+bench/ITERATIONS.md
+!bench/results/.gitkeep
+bench-github/results/
+bench-browser/results/
+
+# Published benchmark results (tracked)
+!bench/published-results/
+
+# Blog draft (not version-controlled)
+docs/blog.md
+docs/social/rendered/
+
+# Desloppify
+.desloppify/
+
+# OS
+.DS_Store
+
+.gnhf/runs/
+
+# Playwright MCP session artifacts
+.playwright-mcp/
+
+# graft local pipeline cache
+graft/.cache/
+
+# npm lock file (this project uses pnpm)
+package-lock.json
+.no-mistakes/evidence/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
