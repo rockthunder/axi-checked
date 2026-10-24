@@ -187,15 +187,12 @@ No `mcp.json` ships: the CLI itself is the agent interface, and adding one would
 
 ### Telemetry
 
-`src/telemetry.js` posts anonymous events to an Umami endpoint.
-The website ID and host can be baked into the bundle at build time via `LAVISH_AXI_UMAMI_HOST`/`LAVISH_AXI_UMAMI_WEBSITE_ID` env vars (consumed by `scripts/build.js` and inlined as `process.env.LAVISH_AXI_BUILD_UMAMI_*` defines).
-The build also inlines `package.json`'s version as `process.env.LAVISH_AXI_BUILD_VERSION` for the CLI/server version handshake, with source runs falling back to reading `package.json`.
-Users opt out with `LAVISH_AXI_TELEMETRY=0`.
-The client is best-effort and must never affect CLI behavior - all errors are swallowed.
+Removed in this build: no telemetry module exists and nothing is sent. Do not add any.
+The build still inlines `package.json`'s version as `process.env.LAVISH_AXI_BUILD_VERSION` for the CLI/server version handshake, with source runs falling back to reading `package.json`.
 
 ## Things to know when editing
 
-- `run()` short-circuits `--version`/`-v`/`-V` (`isVersionOnlyArgv`) before `ensureStateDir` and `initDefaultTelemetry`, because agent harnesses probe every tool's version at session start and the telemetry drain in the `finally` block costs up to a full second. Any new startup work must go after that short-circuit; `test/cli-version.test.js` guards both the latency budget and the "no telemetry request, no state dir" property.
+- `run()` short-circuits `--version`/`-v`/`-V` (`isVersionOnlyArgv`) before `ensureStateDir`, because agent harnesses probe every tool's version at session start. Any new startup work must go after that short-circuit; `test/cli-version.test.js` guards both the latency budget and the "no state dir" property.
 - `canonicalFile` runs `realpath`, so symlinks resolve to their target before becoming session keys. Two paths that refer to the same file always collapse to one session.
 - The SDK injected into artifacts lives in `src/artifact-sdk.js` and is wrapped by `createSdkJs`.
   It executes inside an iframe sandboxed with `allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads` (no `allow-same-origin`), so it cannot read the chrome's DOM - communication is `postMessage` only - and it runs the layout audit in the iframe because the chrome cannot directly inspect the sandboxed document. `allow-popups-to-escape-sandbox` lets popups render as top-level tabs without weakening the artifact iframe. Every `/artifact/*` response also carries the matching CSP `sandbox` policy, so an escaped popup that navigates to an artifact-owned active document remains opaque-origin and cannot become a same-origin application client.

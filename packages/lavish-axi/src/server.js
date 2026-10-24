@@ -1376,6 +1376,9 @@ export async function serve({
   // loopback server.
   app.post("/api/:key/share", async (req, res, next) => {
     try {
+      // Corporate build: hosted share (third-party ht-ml.app) is disabled.
+      res.status(403).json({ error: "hosted share is disabled in this build" });
+      return;
       if (!isSameOriginRequest(req, allowedHostnames, allowAnyHostname)) {
         res.status(403).json({ error: "cross-origin share request rejected" });
         return;

@@ -54,7 +54,6 @@ import {
   shouldRestartServer,
   startPollWaitReporter,
   stopCommand,
-  telemetryCommandName,
   VERSION,
 } from "../src/cli.js";
 import { DESIGN_PRIORITY_RULE, DESIGN_SYSTEM_HINT } from "../src/design-reference.js";
@@ -2887,15 +2886,6 @@ test("setup rejects an unknown action and names both supported ones", async () =
     await rm(stateDir, { force: true, recursive: true });
     await rm(homeDir, { force: true, recursive: true });
   }
-});
-
-test("telemetry command names are anonymous and do not include file paths", () => {
-  assert.equal(telemetryCommandName(["report.html"]), "open");
-  assert.equal(telemetryCommandName(["poll", "/tmp/secret/report.html"]), "poll");
-  assert.equal(telemetryCommandName(["end", "/tmp/secret/report.html"]), "end");
-  assert.equal(telemetryCommandName(["playbook", "diagram"]), "playbook");
-  assert.equal(telemetryCommandName(["design"]), "design");
-  assert.equal(telemetryCommandName([]), "home");
 });
 
 test("server spawn options detach without inheriting invalid streams", () => {

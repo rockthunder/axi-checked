@@ -13,6 +13,7 @@
 // page rather than a removal.
 
 const DEFAULT_API_URL = "https://api.ht-ml.app";
+const HOSTED_SHARE_DISABLED = "Hosted share (ht-ml.app) is disabled in this build";
 const PUBLISH_TIMEOUT_MS = 30_000;
 const SITE_ID_RE = /^[A-Za-z0-9._-]+$/;
 
@@ -120,6 +121,10 @@ export function createUnpublishedPageHtml() {
  * @returns {Promise<{ url: string, site_id: string, update_key: string, status: string }>}
  */
 export async function publishToHtmlApp(html, options = {}) {
+  throw new Error(HOSTED_SHARE_DISABLED);
+}
+
+async function publishToHtmlAppUpstream(html, options = {}) {
   const env = options.env || process.env;
   const token = optionalString(options.token ?? env.LAVISH_AXI_HTML_APP_TOKEN);
   const data = await requestHtmlApp({
@@ -188,6 +193,10 @@ function echoedSiteId(echoed, fallback) {
  * @returns {Promise<{ url: string, site_id: string, status: string }>}
  */
 export async function updateHtmlApp(siteId, html, options = {}) {
+  throw new Error(HOSTED_SHARE_DISABLED);
+}
+
+async function updateHtmlAppUpstream(siteId, html, options = {}) {
   const env = options.env || process.env;
   const site = normalizeSiteId(siteId);
   const updateKey = optionalString(options.updateKey);
@@ -260,6 +269,8 @@ function htmlAppRequestError(message, details = {}) {
 }
 
 async function requestHtmlApp({ method, path, body, bearer, options, env, action = "publish" }) {
+  // Corporate build: no HTTP to ht-ml.app, regardless of caller.
+  throw new Error(HOSTED_SHARE_DISABLED);
   const apiUrl = (options.apiUrl ? String(options.apiUrl).replace(/\/+$/, "") : "") || htmlAppApiUrl(env);
   const fetchImpl = options.fetch || fetch;
 
