@@ -41,8 +41,8 @@ describe("cli help/version contract", () => {
     await main({ argv: ["--help"], stdout: cap.stdout });
     const out = cap.output();
     expect(out).toContain(TOP_HELP);
-    // SDK appends the inherited built-in update command to top-level help.
-    expect(out).toContain("update");
+    // This build has no SDK self-update footer.
+    expect(out).not.toContain("built-in");
     expect(process.exitCode).toBeFalsy();
   });
 

@@ -53,8 +53,8 @@ describe("cli help/version contract", () => {
     await main({ argv: ["--help"], stdout: cap.stdout });
     const out = cap.output();
     expect(out).toContain(TOP_HELP);
-    // SDK appends the inherited built-in update command to top-level help.
-    expect(out).toContain("update");
+    // This build has no SDK self-update footer.
+    expect(out).not.toContain("built-in");
     expect(process.exitCode).toBeFalsy();
   });
 
@@ -274,20 +274,21 @@ describe("--site flag reaches the Confluence transport (2026-07-19)", () => {
     // `--site --limit 5` must not make "--limit" the site (request to
     // https://--limit/...) and silently drop --limit. resolveContext throws;
     // bin's top-level .catch renders it (here main() rejects directly).
+    // axi-sdk-js >= 0.1.13 renders resolveContext failures on stdout instead of rejecting.
     const cap = capture();
-    await expect(
-      main({ argv: ["space", "list", "--site", "--limit", "5"], stdout: cap.stdout }),
-    ).rejects.toMatchObject({
-      code: "VALIDATION_ERROR",
-      message: expect.stringContaining("--site requires a value"),
-    });
+    await main({ argv: ["space", "list", "--site", "--limit", "5"], stdout: cap.stdout });
+    expect(cap.output()).toContain("--site requires a value");
+    expect(cap.output()).toContain("VALIDATION_ERROR");
+    expect(process.exitCode).toBe(2);
+    process.exitCode = undefined;
   });
 
   it("rejects a trailing --site with no value at all", async () => {
     const cap = capture();
-    await expect(
-      main({ argv: ["space", "list", "--site"], stdout: cap.stdout }),
-    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    await main({ argv: ["space", "list", "--site"], stdout: cap.stdout });
+    expect(cap.output()).toContain("VALIDATION_ERROR");
+    expect(process.exitCode).toBe(2);
+    process.exitCode = undefined;
   });
 });
 
