@@ -36,6 +36,14 @@ Generated from `review/log.tsv` by `python -I scripts/review-status.py render-ma
   Read in full. Agent-facing guidance text only. The 'code' playbook instructs agents to import @pierre/diffs from https://esm.sh/@pierre/diffs@1.2.10?bundle (version pinned but esm.sh ?bundle pulls unpinned transitive deps, no SRI) into artifacts. Same CDN policy decision as design-reference.js. No hidden instructions or exfil patterns found.
 - `packages/lavish-axi/src/server.js`
   Local HTTP API unauthenticated on loopback: Host allowlist + Origin guard are sound, but header-less requests are accepted, so any local process/user can POST /api/sessions for any .html path, read its directory via /artifact/, call /shutdown. Session key is a path hash, not a secret. Dead code after early 403 in share route (my patch); autoTailscale=false (my patch); chrome UI still shows a 'Publish link' menu item that now errors. Whiteboard HMAC, WS Origin/Host checks, artifact CSP sandbox, XFO DENY all OK.
+- `packages/slack-axi/src/commands/setup.ts`
+  Read in full. 'setup hooks' installs persistent SessionStart hooks via axi-sdk-js installSessionStartHooks (see packages/axi/axi-sdk-js hooks.ts MANUAL entry).
+- `packages/slack-axi/src/commands/write.ts`
+  Read in full. 'draft' stores a message locally, but 'draft send <id>' posts it to Slack AS THE USER with no human confirmation step: an agent can run draft then draft send back to back, i.e. approval is not enforced. react also writes. Mutations with 2+ workspaces require an explicit --team.
+- `packages/slack-axi/src/config.ts`
+  Read in full. Slack USER token (xoxp, non-expiring: manifest disables token rotation) stored as plaintext JSON at ~/.config/slack-axi/workspaces/<team>/token.json (0600 at creation; directories not restricted). SLACK_AXI_TOKEN env var also accepted. Drafts and id<->name caches stored under the same dir. Decide whether a long-lived plaintext user token is acceptable.
+- `packages/slack-axi/src/slack/scopes.ts`
+  Read in full. Requested user-token scopes give read access to ALL the user's conversations incl. private channels, group DMs and DMs (channels/groups/im/mpim :read and :history), workspace search:read, users:read, files:read, plus chat:write and reactions:write. Token acts as the user.
 
 ## NOTE - minor observations
 
@@ -91,3 +99,49 @@ Generated from `review/log.tsv` by `python -I scripts/review-status.py render-ma
   Read in full. Local state.json store only (fs/promises, crypto, path). No network/exec. Attachment refs re-derived from disk, tokens via crypto.randomBytes. NOTE: state.json written with default umask (not 0600) and contains artifact paths, chat transcript and DOM snapshots; keep the state dir (~/.lavish-axi) private.
 - `packages/lavish-axi/src/tailscale.js`
   Runs 'tailscale status --json' via execFile (no shell). No longer invoked: auto-detection was disabled in server.js (commit: never auto-bind the Tailscale address).
+- `packages/slack-axi/.agents/skills/specops/README.md`
+  SCAN-ONLY: upstream specops skill/reference markdown (agent-facing). Pattern-scanned for curl/wget/npx/eval/sudo/pipe-to-shell: none.
+- `packages/slack-axi/.agents/skills/specops/SKILL.md`
+  SCAN-ONLY: upstream specops skill/reference markdown (agent-facing). Pattern-scanned for curl/wget/npx/eval/sudo/pipe-to-shell: none.
+- `packages/slack-axi/.agents/skills/specops/references/audit-spec-drift.md`
+  SCAN-ONLY: upstream specops skill/reference markdown (agent-facing). Pattern-scanned for curl/wget/npx/eval/sudo/pipe-to-shell: none.
+- `packages/slack-axi/.agents/skills/specops/references/plans-protocol.md`
+  SCAN-ONLY: upstream specops skill/reference markdown (agent-facing). Pattern-scanned for curl/wget/npx/eval/sudo/pipe-to-shell: none.
+- `packages/slack-axi/.agents/skills/specops/references/spec-drift-auditor.md`
+  SCAN-ONLY: upstream specops skill/reference markdown (agent-facing). Pattern-scanned for curl/wget/npx/eval/sudo/pipe-to-shell: none.
+- `packages/slack-axi/.agents/skills/specops/scripts/build-cli.ts`
+  SCAN-ONLY: upstream specops CLI TypeScript source (plans dashboard, hook installer). Same behaviour as the bundle; no network.
+- `packages/slack-axi/.agents/skills/specops/scripts/build-skill.ts`
+  SCAN-ONLY: upstream specops CLI TypeScript source (plans dashboard, hook installer). Same behaviour as the bundle; no network.
+- `packages/slack-axi/.agents/skills/specops/scripts/specops.mjs`
+  SCAN-ONLY: generated specops bundle (different build from gws/metabase copies). Pattern scan: git via execFile/execSync with fixed args, explicit opt-in 'hook install' writing .claude/settings.json; no network.
+- `packages/slack-axi/.agents/skills/specops/src/cli/args.ts`
+  SCAN-ONLY: upstream specops CLI TypeScript source (plans dashboard, hook installer). Same behaviour as the bundle; no network.
+- `packages/slack-axi/.agents/skills/specops/src/cli/bin.ts`
+  SCAN-ONLY: upstream specops CLI TypeScript source (plans dashboard, hook installer). Same behaviour as the bundle; no network.
+- `packages/slack-axi/.agents/skills/specops/src/cli/cli.ts`
+  SCAN-ONLY: upstream specops CLI TypeScript source (plans dashboard, hook installer). Same behaviour as the bundle; no network.
+- `packages/slack-axi/.agents/skills/specops/src/cli/commands/common.ts`
+  SCAN-ONLY: upstream specops CLI TypeScript source (plans dashboard, hook installer). Same behaviour as the bundle; no network.
+- `packages/slack-axi/.agents/skills/specops/src/cli/commands/dag.ts`
+  SCAN-ONLY: upstream specops CLI TypeScript source (plans dashboard, hook installer). Same behaviour as the bundle; no network.
+- `packages/slack-axi/.agents/skills/specops/src/cli/commands/home.ts`
+  SCAN-ONLY: upstream specops CLI TypeScript source (plans dashboard, hook installer). Same behaviour as the bundle; no network.
+- `packages/slack-axi/.agents/skills/specops/src/cli/commands/hook.ts`
+  SCAN-ONLY: upstream specops CLI TypeScript source (plans dashboard, hook installer). Same behaviour as the bundle; no network.
+- `packages/slack-axi/.agents/skills/specops/src/cli/commands/next.ts`
+  SCAN-ONLY: upstream specops CLI TypeScript source (plans dashboard, hook installer). Same behaviour as the bundle; no network.
+- `packages/slack-axi/.agents/skills/specops/src/cli/invocation.ts`
+  SCAN-ONLY: upstream specops CLI TypeScript source (plans dashboard, hook installer). Same behaviour as the bundle; no network.
+- `packages/slack-axi/.agents/skills/specops/src/cli/plans.ts`
+  SCAN-ONLY: upstream specops CLI TypeScript source (plans dashboard, hook installer). Same behaviour as the bundle; no network.
+- `packages/slack-axi/.agents/skills/specops/src/cli/reference.ts`
+  SCAN-ONLY: upstream specops CLI TypeScript source (plans dashboard, hook installer). Same behaviour as the bundle; no network.
+- `packages/slack-axi/.agents/skills/specops/src/cli/skill.ts`
+  SCAN-ONLY: upstream specops CLI TypeScript source (plans dashboard, hook installer). Same behaviour as the bundle; no network.
+- `packages/slack-axi/.agents/skills/specops/src/cli/toon.ts`
+  SCAN-ONLY: upstream specops CLI TypeScript source (plans dashboard, hook installer). Same behaviour as the bundle; no network.
+- `packages/slack-axi/src/commands/auth.ts`
+  Read in full. 'auth login --token xoxp-...' takes the token on the command line (visible in shell history / process list); prefer SLACK_AXI_TOKEN or stdin. 'auth revoke' only deletes the local file, it does not revoke the token in Slack.
+- `packages/slack-axi/src/slack/cache.ts`
+  Read first 120 lines. Caches channel/user id<->name (incl. user emails when granted) under ~/.config/slack-axi/cache with default umask; message content is not cached.

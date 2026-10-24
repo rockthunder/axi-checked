@@ -67,6 +67,34 @@ export async function fetchFileInfo(
   return (res.file ?? {}) as Record<string, unknown>;
 }
 
+/**
+ * Corporate-build guard: the file URL comes out of an API response and the workspace token is
+ * attached to it, so it must be https on a Slack host (never an arbitrary URL).
+ */
+export function assertSlackHttpsUrl(raw: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new AxiError("File URL is not valid", "FILE_UNAVAILABLE", []);
+  }
+  const host = parsed.hostname.toLowerCase();
+  const slackHost =
+    host === "slack.com" ||
+    host.endsWith(".slack.com") ||
+    host === "slack-files.com" ||
+    host.endsWith(".slack-files.com") ||
+    host === "slack-edge.com" ||
+    host.endsWith(".slack-edge.com");
+  if (parsed.protocol !== "https:" || !slackHost) {
+    throw new AxiError(
+      `Refusing to send the Slack token to a non-Slack file URL (${parsed.protocol}//${host})`,
+      "FILE_UNAVAILABLE",
+      [],
+    );
+  }
+}
+
 /** The saved result of a successful download. */
 export interface DownloadResult {
   id: string;
@@ -104,6 +132,7 @@ export async function downloadFile(
     ]);
   }
 
+  assertSlackHttpsUrl(url);
   const res = await fetch(url, { headers: { Authorization: `Bearer ${session.token}` } });
   const contentType = res.headers.get("content-type") ?? "";
   // Slack returns its login page (HTML, 200) when the token lacks files:read — never the bytes.
