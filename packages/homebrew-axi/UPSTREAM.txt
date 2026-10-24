@@ -1,0 +1,5 @@
+Upstream: https://github.com/mstuart/homebrew-axi
+Commit:   724e55bce4bda60ff829a357ebc766a8d7392269
+Date:     2026-10-19T21:35:47Z
+Source README: https://github.com/mstuart/homebrew-axi#readme
+Snapshot of tracked files at the commit above. Excluded: .github/ (upstream CI/publish config).

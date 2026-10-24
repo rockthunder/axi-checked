@@ -1,0 +1,58 @@
+{
+  "name": "homebrew-axi",
+  "version": "0.1.1",
+  "description": "Read-only Homebrew wrapper with token-efficient output — an AXI (Agent eXperience Interface).",
+  "keywords": [
+    "axi",
+    "agent",
+    "cli",
+    "homebrew",
+    "brew",
+    "macos",
+    "packages",
+    "toon"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mstuart/homebrew-axi.git"
+  },
+  "license": "MIT",
+  "author": "Mark Stuart",
+  "type": "module",
+  "bin": {
+    "homebrew-axi": "dist/bin/homebrew-axi.js"
+  },
+  "files": [
+    "dist",
+    "skills/homebrew-axi",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:skill": "tsx scripts/build-skill.ts",
+    "check": "ultracite check",
+    "dev": "tsx bin/homebrew-axi.ts",
+    "fix": "ultracite fix",
+    "prepublishOnly": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "axi-sdk-js": "^0.1.10"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^7.0.2",
+    "ultracite": "8.0.1",
+    "vitest": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
