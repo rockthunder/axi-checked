@@ -126,7 +126,8 @@ describe("issueCommand", () => {
         ["list", "--state", "closed", "--label", "bug", "--limit=5"],
         ctx,
       );
-      expect(result).toContain("issues[0]");
+      // @toon-format/toon >= 2.3.1 (security fix) renders an empty list as `issues: []`
+      expect(result).toMatch(/issues(\[0\]|: \[\])/);
       expect(mockedGhJson).toHaveBeenCalled();
     });
 

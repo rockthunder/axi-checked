@@ -24,6 +24,9 @@ describe("setup command", () => {
 
     const settingsPath = join(home, ".claude", "settings.json");
     expect(existsSync(settingsPath)).toBe(true);
-    expect(readFileSync(settingsPath, "utf-8")).toContain("metabase-axi");
+    // axi-sdk-js >= 0.1.13 builds the hook command from the running executable (vitest here), not the marker name.
+    const settings = JSON.parse(readFileSync(settingsPath, "utf-8"));
+    expect(settings.hooks.SessionStart[0].hooks[0].type).toBe("command");
+    expect(typeof settings.hooks.SessionStart[0].hooks[0].command).toBe("string");
   });
 });

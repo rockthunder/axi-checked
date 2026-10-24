@@ -20,5 +20,10 @@
   "dependencies": {
     "@toon-format/toon": "^2.1.0",
     "axi-sdk-js": "0.1.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
   }
 }

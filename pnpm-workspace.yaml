@@ -1,8 +1,10 @@
 packages:
   - "packages/*"
   - "packages/*/packages/*"
-  # monorepo roots of upstream projects whose root manifest is not needed (atlassian-axi's root provides shared dev tooling and stays a member)
+  # monorepo roots of upstream projects; only their inner packages are workspace members.
+  # (atlassian-axi's root drives builds through Turborepo, which reports anonymous telemetry; its sub-packages get their dev tools directly.)
   - "!packages/axi"
+  - "!packages/atlassian-axi"
   - "!packages/reactive-axi"
 
 # --- supply-chain policy (carried over from upstream, applied to the whole workspace) ---

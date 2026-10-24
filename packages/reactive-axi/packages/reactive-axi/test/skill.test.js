@@ -156,14 +156,11 @@ test("createSkillMarkdown does not leak live session state", () => {
   assert.ok(!/\/session\/[0-9a-f]{8}/.test(md), "no live session URLs");
 });
 
-test("createSkillMarkdown uses non-interactive npx commands", () => {
+test("createSkillMarkdown never tells agents to fetch the tool with npx (vetted install only)", () => {
   const md = createSkillMarkdown();
 
   assert.match(md, /`reactive-axi <project-dir>`/);
-  assert.match(md, /If reactive-axi output shows a follow-up command starting with `reactive-axi`/);
-  assert.match(md, /run it as `reactive-axi/);
-  assert.doesNotMatch(md, /`reactive-axi/);
-  assert.doesNotMatch(md, /Run `reactive-axi/);
+  assert.doesNotMatch(md, /npx/);
 });
 
 test("createSkillMarkdown documents installed-copy fallback for restricted sandboxes", () => {

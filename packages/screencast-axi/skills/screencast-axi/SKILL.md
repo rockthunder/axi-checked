@@ -43,7 +43,7 @@ ffmpeg must be installed. Signing in is a one-time human step
 (`auth login --interactive`); the CLI refuses rather than prompting when no
 person is present.
 
-Requires the vetted install of screencast-axi (never fetched with npx), with playwright and tsx available in the project; `init`/`scaffold` write
+Needs the vetted screencast-axi install plus playwright and tsx; `init`/`scaffold` write
 files that load without it:
 
     screencast-axi <command>

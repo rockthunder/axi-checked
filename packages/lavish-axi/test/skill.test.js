@@ -130,12 +130,9 @@ test("createSkillMarkdown omits setup guidance", () => {
   assert.doesNotMatch(md, /setup plugin/);
 });
 
-test("createSkillMarkdown uses non-interactive npx commands", () => {
+test("createSkillMarkdown never tells agents to fetch the tool with npx (vetted install only)", () => {
   const md = createSkillMarkdown();
 
   assert.match(md, /`lavish-axi <html-file>`/);
-  assert.match(md, /If lavish-axi output shows a follow-up command starting with `lavish-axi`/);
-  assert.match(md, /run it as `lavish-axi/);
-  assert.doesNotMatch(md, /`lavish-axi/);
-  assert.doesNotMatch(md, /Run `lavish-axi/);
+  assert.doesNotMatch(md, /npx/);
 });
