@@ -1,0 +1,29 @@
+{
+  "name": "clockify-axi",
+  "version": "0.1.0",
+  "description": "AXI-compliant wrapper around Clockify's REST API - TOON output, cached workspace/user identity, exit codes you can gate on",
+  "type": "module",
+  "keywords": ["clockify", "cli", "agent", "axi", "toon", "rest", "time-tracking"],
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/elliottkan/clockify-axi.git" },
+  "homepage": "https://github.com/elliottkan/clockify-axi#readme",
+  "bugs": "https://github.com/elliottkan/clockify-axi/issues",
+  "bin": { "clockify-axi": "./dist/bin/clockify-axi.js" },
+  "files": ["dist", "skills/clockify-axi", "LICENSE", "README.md"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx bin/clockify-axi.ts",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "axi-sdk-js": "^0.1.11"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

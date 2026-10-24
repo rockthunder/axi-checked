@@ -1,0 +1,5 @@
+Upstream: https://github.com/elliottkan/clockify-axi
+Commit:   333499465556b555c4886b1a96623ccc61c004d1
+Date:     2026-09-16T17:22:25+10:00
+Source README: https://github.com/elliottkan/clockify-axi#readme
+Snapshot of tracked files at the commit above. Excluded: .github/ (upstream CI/publish config).
