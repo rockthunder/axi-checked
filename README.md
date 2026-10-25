@@ -8,6 +8,7 @@ AXI ("Agent eXperience Interface") tools are CLIs designed to be driven by AI co
 
 ## What is in here
 
+- [`GETTING-STARTED.md`](GETTING-STARTED.md) - what AXI is, prerequisites, tokens, install steps and agent prompts.
 - [`SOURCES.md`](SOURCES.md) - every package, its upstream repository, the exact reviewed commit, and links back to the original README.
 - `packages/<name>/` - the code. Each package contains an `UPSTREAM.txt` and its README starts with a banner linking to the original.
 - 21 CLIs and the shared `axi-sdk-js` library, from 21 upstream repositories (`confluence-axi` is included because it lives in the same upstream repo as `jira-axi`), plus a list of projects that were reviewed but **not** vendored or deliberately **excluded** (with reasons).
@@ -35,14 +36,16 @@ pnpm install --frozen-lockfile      # lifecycle scripts are disabled by .npmrc
 pnpm build                          # explicit build; nothing builds on install
 ```
 
-Make one tool available on a developer's machine:
+Make one tool available on a developer's machine (run `pnpm setup` once and open a new terminal first so the pnpm global bin folder is on PATH; `pnpm link --global` no longer works in pnpm 12):
 
 ```bash
-cd packages/gh-axi && pnpm link --global
+pnpm add -g ./packages/gh-axi
 gh-axi --help
 ```
 
-The tools call the vendor CLIs and APIs they wrap (`gh`, `aws`, `kubectl`, `psql`, Slack, Google, ...) with the developer's own credentials; install those separately.
+Step-by-step install, the credentials each tool needs, and ready-to-paste agent prompts (one for everything, one per tool) are in [`GETTING-STARTED.md`](GETTING-STARTED.md).
+
+The tools call the vendor CLIs and APIs they wrap (`gh`, `aws`, `kubectl`, `psql`, Slack, Jira, ...) with the developer's own credentials; install those separately.
 
 Agent hooks (`<tool> setup hooks`) are opt-in. Nothing in this repo installs them automatically.
 
