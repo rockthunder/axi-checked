@@ -2,7 +2,7 @@
 
 Goal: every runtime code file in `packages/` covered by the reviewer, with a verdict per file.
 
-**Status: all 626 files are logged.** The note on each line says how it was covered: `Read in full` | `SINK-REGIONS-READ` (every line touching filesystem/network/process/environment was read in context) | `SCAN-ONLY (no fs/network/process/env sinks)` (pure formatting/logic checked by pattern). About half of all lines are scan-only; to upgrade them, read the file and re-run `log` with a `Read in full` note (the last entry for a path wins). Start your own review at `MANUAL-REVIEW.md`.
+**Status: all 492 files are logged.** The note on each line says how it was covered: `Read in full` | `SINK-REGIONS-READ` (every line touching filesystem/network/process/environment was read in context) | `SCAN-ONLY (no fs/network/process/env sinks)` (pure formatting/logic checked by pattern). About half of all lines are scan-only; to upgrade them, read the file and re-run `log` with a `Read in full` note (the last entry for a path wins). Start your own review at `MANUAL-REVIEW.md`.
 
 - `manifest.tsv` - every in-scope file (package, path, lines, tier). Regenerate with `python -I scripts/review-status.py init` (the log is kept).
 - `log.tsv` - one line per file already read: `path <TAB> verdict <TAB> lines <TAB> note`.

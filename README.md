@@ -10,7 +10,7 @@ AXI ("Agent eXperience Interface") tools are CLIs designed to be driven by AI co
 
 - [`SOURCES.md`](SOURCES.md) - every package, its upstream repository, the exact reviewed commit, and links back to the original README.
 - `packages/<name>/` - the code. Each package contains an `UPSTREAM.txt` and its README starts with a banner linking to the original.
-- 23 CLIs and the shared `axi-sdk-js` library, from 23 upstream repositories (`confluence-axi` is included because it lives in the same upstream repo as `jira-axi`), plus a list of projects that were reviewed but **not** vendored or deliberately **excluded** (with reasons).
+- 21 CLIs and the shared `axi-sdk-js` library, from 21 upstream repositories (`confluence-axi` is included because it lives in the same upstream repo as `jira-axi`), plus a list of projects that were reviewed but **not** vendored or deliberately **excluded** (with reasons).
 
 ## How the history is organised
 

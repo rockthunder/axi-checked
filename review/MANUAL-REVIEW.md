@@ -44,20 +44,6 @@ Generated from `review/log.tsv` by `python -I scripts/review-status.py render-ma
   SCAN-ONLY (no fs/network/process/env sinks): 'setup hooks' installs persistent SessionStart hooks via axi-sdk-js.
 - `packages/gh-axi/src/gh.ts`
   Read in full. Single chokepoint that runs the GitHub CLI 'gh' (execFile, argv only; binary overridable with GH_BIN env) with the user's gh login; optional stdin for secret values. gh-axi holds no credentials; its blast radius is whatever your gh token can do. Audit/pin the gh you install.
-- `packages/gws-axi/src/auth/scopes.ts`
-  Read in full. Requested OAuth scopes are very broad: gmail.modify, calendar, documents, drive (full), presentations, spreadsheets, chat.messages (read+send+edit/delete), chat.memberships.readonly, chat.users.readstate, drive.activity.readonly, directory.readonly, gmail.settings.basic. Restrictions such as 'no gmail send' and 'no public sharing' are enforced only in CLI code, not by the token. Decide whether this scope set is acceptable for corporate use; consider trimming.
-- `packages/gws-axi/src/commands/chat/send.ts`
-  Can post arbitrary text (inline, stdin or --file, any local file readable by the user) to any Chat space/DM the account can reach, including spaces with external members. Exfiltration-capable for a prompt-injected agent. Only egress is Google Chat API.
-- `packages/gws-axi/src/commands/drive/share.ts`
-  Read (first 200 lines). Refuses anyone/domain sharing (good) but will share any file with ANY named external email address as reader/commenter/writer, with no domain allowlist. Exfiltration-capable for a prompt-injected agent; consider a domain allowlist.
-- `packages/gws-axi/src/commands/drive/upload.ts`
-  Read key sections. Uploads any local file path (or stdin/--content) the user can read into the account's Drive; combined with drive share this is an exfil path. Only egress is Drive API.
-- `packages/gws-axi/src/commands/gmail/filters.ts`
-  Persistent-rule primitive: 'gmail filter-create --forward <addr>' creates an auto-forwarding Gmail filter (Gmail itself only allows verified forwarding addresses). An injected agent could set up silent mail forwarding. Consider removing --forward or restricting by policy. Otherwise only Google API calls.
-- `packages/gws-axi/src/commands/setup.ts`
-  Read in full. 'setup hooks' installs persistent SessionStart hooks via axi-sdk-js installSessionStartHooks (same hook-writing behaviour flagged in packages/axi/axi-sdk-js/src/hooks.ts).
-- `packages/gws-axi/src/google/tokens.ts`
-  Read in full. OAuth access+refresh tokens stored as PLAINTEXT JSON at ~/.config/gws-axi/accounts/<email>/tokens.json (mode 0600 only at file creation; directory not chmod'ed). Refresh goes only to oauth2.googleapis.com. Decide whether plaintext-at-rest tokens are acceptable (no OS keychain use).
 - `packages/homebrew-axi/src/commands/setup.ts`
   SCAN-ONLY (no fs/network/process/env sinks): 'setup hooks' installs persistent SessionStart hooks via axi-sdk-js.
 - `packages/kubernetes-axi/bin/kubernetes-axi.js`
@@ -139,10 +125,6 @@ Generated from `review/log.tsv` by `python -I scripts/review-status.py render-ma
   Read first 40 lines. Upstream contributor guide for the AXI repo (benchmarks, SDK, social video rendering). Benign.
 - `packages/axi/CLAUDE.md`
   @AGENTS.md include.
-- `packages/canva-axi/AGENTS.md`
-  Read in full (shown by the harness). Documents that every mutation requires --confirm before network access; benign.
-- `packages/canva-axi/src/commands/canva.ts`
-  SINK-REGIONS-READ: . Mutations are gated by --confirm per the package notes.
 - `packages/chrome-devtools-axi/AGENTS.md`
   Upstream CONTRIBUTOR guidance addressed to coding agents (release workflow, 'git push no-mistakes', airlock). Not relevant to using the tool and could steer an agent working in this repo toward upstream's workflow; consider deleting upstream AGENTS.md/CLAUDE.md files from vendored packages.
 - `packages/chrome-devtools-axi/src/hooks.ts`
@@ -177,38 +159,6 @@ Generated from `review/log.tsv` by `python -I scripts/review-status.py render-ma
   Pattern-scanned. repo create/fork with --visibility (public repos possible).
 - `packages/gh-axi/src/commands/secret.ts`
   SCAN-ONLY (no fs/network/process/env sinks): . Sets/deletes repo/org/env secrets via gh with stdin values (writes to GitHub Actions secrets: can alter CI behaviour).
-- `packages/gws-axi/.agents/skills/specops/SKILL.md`
-  SCAN-ONLY (no fs/network/process/env sinks): Upstream specops skill/reference markdown (agent-facing). Pattern-scanned for curl/wget/npx/eval/sudo/pipes-to-shell: none; only example URLs. Benign planning-protocol text.
-- `packages/gws-axi/.agents/skills/specops/references/audit-spec-drift.md`
-  SCAN-ONLY (no fs/network/process/env sinks): Upstream specops skill/reference markdown (agent-facing). Pattern-scanned for curl/wget/npx/eval/sudo/pipes-to-shell: none; only example URLs. Benign planning-protocol text.
-- `packages/gws-axi/.agents/skills/specops/references/plans-protocol.md`
-  SCAN-ONLY (no fs/network/process/env sinks): Upstream specops skill/reference markdown (agent-facing). Pattern-scanned for curl/wget/npx/eval/sudo/pipes-to-shell: none; only example URLs. Benign planning-protocol text.
-- `packages/gws-axi/.agents/skills/specops/references/spec-drift-auditor.md`
-  SCAN-ONLY (no fs/network/process/env sinks): Upstream specops skill/reference markdown (agent-facing). Pattern-scanned for curl/wget/npx/eval/sudo/pipes-to-shell: none; only example URLs. Benign planning-protocol text.
-- `packages/gws-axi/.agents/skills/specops/scripts/specops.mjs`
-  Generated bundle (axi-sdk-js + specops CLI). Read lines 985-1050 and 1340-1568: runs 'git log'/'git rev-parse' via execFile/execSync with fixed args; 'specops hook install' writes a SessionStart hook into <repo>/.claude/settings.json or ~/.claude/settings.json (explicit, opt-in; uninstall provided). No network (no fetch/URLs found by pattern scan). Three differing copies exist (gws/metabase/slack).
-- `packages/gws-axi/.claude/CLAUDE.md`
-  Read in full. Upstream contributor guidance auto-loaded by Claude Code in this directory. No exfil/hidden instructions. Documents design (no gmail send, no public sharing).
-- `packages/gws-axi/.claude/agents/spec-drift-auditor.md`
-  Read in full. Upstream sub-agent prompt (tools: Bash, Glob, Grep, Read, WebFetch, WebSearch; model sonnet). Benign spec-audit instructions. WebFetch/WebSearch granted - consider removing the vendored .claude dir.
-- `packages/gws-axi/.claude/commands/release.md`
-  Upstream maintainer slash command (/release): runs gh pr list/edit/merge and npm view against the AUTHOR's repo JarvusInnovations/gws-axi. Harmless for you (needs their repo permissions) but is author-ops baggage; consider deleting the vendored .claude/commands and .claude/agents directories.
-- `packages/gws-axi/src/auth/gcloud.ts`
-  Read in full. execFileSync('gcloud', fixed arg arrays; no shell). Project id from user flag is passed as a positional arg (a value starting with '-' could be read as a gcloud flag; low risk, user-supplied).
-- `packages/gws-axi/src/auth/loopback.ts`
-  Read in full. OAuth loopback: PKCE S256, random state, 127.0.0.1-only listener on a random port, code exchange + userinfo only to Google, callback URL validated (host/port/state). Callback server also serves setup.html at /. Tokens file 0600, profile.json default umask. Prints/stores nothing outside ~/.config/gws-axi.
-- `packages/gws-axi/src/auth/setup-html.ts`
-  Read in full. Generates ~/.config/gws-axi/setup.html (also served on the loopback callback origin). Interpolates account email / Google profile name / --account value into HTML without escaping: minor self-XSS-class issue (needs an attacker-controlled Google display name). Links only to console.cloud.google.com and accounts.google.com.
-- `packages/gws-axi/src/auth/steps.ts`
-  Read in full. Guided setup. credentials.json (OAuth client secret) installed with copyFileSync, so it keeps the SOURCE file's permissions (often 0644) rather than 0600. Tighten with chmod 600 on the copy (also in 'auth join').
-- `packages/gws-axi/src/commands/auth.ts`
-  Read in full. auth setup/join/login/accounts/use/revoke/status/reset/publish. 'auth join' copies a shared client credentials.json (copyFileSync, perms inherited). 'auth revoke' only deletes local files and does NOT revoke the token at Google. No other egress.
-- `packages/gws-axi/src/commands/gmail/draft.ts`
-  Read key sections. --attach reads arbitrary local files into a Gmail DRAFT (never sent; send is deliberately unimplemented). Only egress is Gmail API; a human must press Send.
-- `packages/gws-axi/src/config.ts`
-  Read in full. State under ~/.config/gws-axi (XDG). setup.json/config.json/profile.json written with default umask (tokens.json and pending-auth.json are 0600). No network.
-- `packages/gws-axi/src/util/paths.ts`
-  Read in full. Remote-supplied filenames are sanitised (separators replaced). --out can point anywhere and existing files are overwritten silently (user/agent-directed).
 - `packages/lavish-axi/AGENTS.md`
   Upstream contributor guidance addressed to coding agents (auto-loaded by Claude Code when working in this dir). Contains no exfil/hidden instructions; refers to upstream no-mistakes workflow. Consider deleting from the vendored copy.
 - `packages/lavish-axi/CLAUDE.md`
