@@ -6,6 +6,18 @@ AXI ("Agent eXperience Interface") tools are CLIs designed to be driven by AI co
 
 > **Read [`SECURITY-REVIEW.md`](SECURITY-REVIEW.md) before rolling this out.** It states what was checked, what was changed, what was *not* checked, and which risks remain by design.
 
+## Important notice: please do your own checks
+
+**What was done.** The upstream projects were copied at pinned commits and examined with the help of an AI assistant (Claude) at the repository owner's request. The work covered: pattern scans of every file; reading the security-relevant code (credentials, network calls, process execution, local servers); removing telemetry, self-update and on-demand downloads; patching weak safety guards; locking one dependency tree and scanning it against the public OSV.dev vulnerability database; and running the test suites on Linux. Every change is a separate git commit with its reason, and everything that still needs a human decision is listed in [`review/MANUAL-REVIEW.md`](review/MANUAL-REVIEW.md).
+
+**What this is not.** It is not a certification, a guarantee, or an independent professional security audit. Roughly half of the code (about 330 of 490 files) was checked by pattern search only, not read line by line; no tool was run under network monitoring; native binaries pulled in by dependencies were not analysed; and an AI-assisted review can miss things or be wrong. New vulnerabilities and new upstream releases appear after the review date (2026-10-24).
+
+**Please verify for yourself before you rely on it.** Read the diffs against the `import(pristine)` commits for the tools you intend to use, review [`SECURITY-REVIEW.md`](SECURITY-REVIEW.md) and the manual-review list, test in a sandbox with network capture, give each tool only least-privilege credentials, and have your own security, legal and compliance teams approve it for your environment. Re-run the vulnerability scan (`pnpm run audit:osv`) before each rollout.
+
+**No warranty and no liability.** This repository is provided "as is", without warranty of any kind, express or implied, including merchantability, fitness for a particular purpose, security, or non-infringement. The maintainer of this repository and the people who contributed to the review accept no responsibility or liability for any loss, damage, data exposure, outage, cost or other consequence arising from downloading, installing, modifying or using this code or from relying on any statement in this repository, to the fullest extent permitted by law. You use it at your own risk and are responsible for deciding whether it is suitable for your environment. (This notice is a plain-language statement, not legal advice; ask your own counsel if you need one tailored to your organisation.)
+
+**Not affiliated with the original authors.** The tools are the work of their original authors (see [`SOURCES.md`](SOURCES.md)), who have not reviewed, endorsed or supported this fork and are not responsible for its changes. Do not report problems with this build to them; their support channels apply only to the unmodified upstream releases. Each package keeps its upstream licence (all MIT), and the MIT licence's own disclaimer of warranty applies to this repository as well.
+
 ## What is in here
 
 - [`GETTING-STARTED.md`](GETTING-STARTED.md) - what AXI is, prerequisites, tokens, install steps and agent prompts.
